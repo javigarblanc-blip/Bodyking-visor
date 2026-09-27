@@ -5,9 +5,10 @@
   Licencia: Creative Commons BY-NC-SA 4.0 — https://creativecommons.org/licenses/by-nc-sa/4.0/
   Lee los datos que publica la app Bodyking FC en Firebase (ruta bodyking/temporada).
 -->
-<html lang="es">
+<html lang="es" translate="no">
 <head>
 <meta charset="UTF-8">
+<meta name="google" content="notranslate">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Bodyking FC — Visor</title>
 <meta name="theme-color" content="#0d0f0f">
@@ -170,6 +171,11 @@
   @keyframes entra { from { transform:translateY(-130%); opacity:0; } to { transform:none; opacity:1; } }
   @media (prefers-reduced-motion: reduce) { #golAviso.on { animation:none; } }
 
+  .leyenda { display:flex; gap:12px; flex-wrap:wrap; font-size:11px; color:var(--gris); margin-top:6px; }
+  .leyenda i { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; vertical-align:-1px; }
+  .tab { font-size:10.5px; letter-spacing:.2px; }
+  .tab .ic { font-size:18px; }
+
   .pie { text-align:center; font-size:10px; color:var(--gris2); margin:16px 0 4px; line-height:1.5; }
   .pie a { color:inherit; }
   .aviso { background:rgba(255,176,32,.08); border:1px solid rgba(255,176,32,.3); color:var(--ambar); border-radius:12px; padding:10px 12px; font-size:12px; line-height:1.5; margin-bottom:10px; }
@@ -196,6 +202,7 @@
   <section class="panel on" id="p-resumen"><div class="vacio"><span class="ic">⏳</span>Cargando…</div></section>
   <section class="panel" id="p-partidos"></section>
   <section class="panel" id="p-ranking"></section>
+  <section class="panel" id="p-panel"></section>
   <section class="panel" id="p-mvp"></section>
 
   <p class="pie">Bodyking FC · visor de solo lectura<br>© Javi García Blanco · <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener">CC BY-NC-SA 4.0</a></p>
@@ -206,6 +213,7 @@
   <button class="tab on" data-tab="resumen"><span class="ic">🏠</span>Resumen</button>
   <button class="tab" data-tab="partidos"><span class="ic">📅</span>Partidos</button>
   <button class="tab" data-tab="ranking"><span class="ic">📊</span>Ranking</button>
+  <button class="tab" data-tab="panel"><span class="ic">📈</span>Panel</button>
   <button class="tab" data-tab="mvp"><span class="ic">🌟</span>MVP</button>
 </div></nav>
 
@@ -224,7 +232,7 @@ const DB_URL = 'https://bodyking-visor-default-rtdb.europe-west1.firebasedatabas
 const RUTA = 'bodyking/temporada';
 
 const DUR_DEF = 50;           // duración por defecto de un partido (min)
-const MIN_MUESTRA = 90;       // por debajo, la media se marca como poco fiable
+const MIN_MUESTRA = 20;       // por debajo, la media se marca como poco fiable
 const NIVELES = {
   'muy-superior': 'Rival muy superior', 'superior': 'Rival superior', 'similar': 'Rival parecido',
   'inferior': 'Rival asequible', 'muy-inferior': 'Rival muy asequible'
@@ -232,7 +240,7 @@ const NIVELES = {
 
 let D = null;          // datos de la temporada
 let META = null;       // { actualizado }
-let estado = { tab: 'resumen', rCrit: 'media', rRango: 'todos', ficha: null };
+let estado = { tab: 'resumen', rCrit: 'media', rRango: 'todos', rVista: 'jug', pVista: 'gen', evMet: 'impacto', jug: null, ficha: null };
 
 /* ---------- utilidades ---------- */
 const esc = t => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
@@ -453,6 +461,7 @@ function abrirDetalle(idx, nombre) {
 }
 
 /* ---------- RANKING ---------- */
+/* ---------- RANKING (Jugadores · Parejas · Asistencia) ---------- */
 const CRITERIOS = {
   media:  { t: '📊 Impacto medio por partido', v: x => x.media, f: x => signo(x.media, 2) },
   imp:    { t: '⭐ Impacto total', v: x => x.imp, f: x => signo(x.imp, 1) },
@@ -464,18 +473,51 @@ const CRITERIOS = {
   min:    { t: '⏱ Minutos', v: x => x.min, f: x => x.min + "'" },
   pj:     { t: '📋 Partidos jugados', v: x => x.pj, f: x => x.pj }
 };
+const COLOR_POS = ['#29b6f6', '#43a047', '#43a047', '#e53935', '#fdd835', '#e53935', '#8e5cd9'];
+const colorPos = id => COLOR_POS[id] || '#8b9490';
+const bloqueObs = (titulo, sub, filas) => `<div style="margin-top:12px; padding:10px 12px; border:1px dashed rgba(255,255,255,.15); border-radius:12px;">
+  <div class="osw" style="font-weight:600; font-size:12px; letter-spacing:.6px; color:var(--tiza);">${titulo}</div>
+  <div class="sub" style="margin-bottom:4px;">${sub}</div>${filas}</div>`;
 
 function pintarRanking() {
   const el = document.getElementById('p-ranking');
+  const vistas = [['jug', '👤 Jugadores'], ['par', '🤝 Parejas'], ['asi', '📋 Asistencia']];
+  const cab = `<div class="segs" style="margin-bottom:10px;">${vistas.map(([k, t]) => `<button class="seg${estado.rVista === k ? ' on' : ''}" data-rvista="${k}">${t}</button>`).join('')}</div>`;
+  el.innerHTML = cab + (estado.rVista === 'par' ? htmlParejas() : estado.rVista === 'asi' ? htmlAsistencia() : htmlRankingJugadores());
+}
+
+function htmlRankingJugadores() {
   const lista = listaTemporada(estado.rRango).filter(x => x.pj > 0 || x.min > 0);
-  if (!lista.length) { el.innerHTML = `<div class="card vacio"><span class="ic">📊</span>Aún no hay datos de jugadores.</div>`; return; }
+  if (!lista.length) return `<div class="card vacio"><span class="ic">📊</span>Aún no hay datos de jugadores.</div>`;
   const c = CRITERIOS[estado.rCrit] || CRITERIOS.media;
   const esMedia = estado.rCrit === 'media';
-  const ok = esMedia ? lista.filter(x => x.min >= MIN_MUESTRA) : lista;
+  const ok = esMedia ? lista.filter(x => x.min >= MIN_MUESTRA) : lista.slice();
   const obs = esMedia ? lista.filter(x => x.min < MIN_MUESTRA).sort((a, b) => b.min - a.min) : [];
   ok.sort((a, b) => c.v(b) - c.v(a) || b.min - a.min);
   const max = Math.max(...ok.map(x => Math.abs(c.v(x))), 0.01);
-  const rangos = [['todos', 'Temporada'], ['5', 'Últ. 5'], ['3', 'Últ. 3']];
+  const nLiga = liga().length;
+  const rangos = [['todos', 'Temporada'], ['10', 'Últ. 10'], ['5', 'Últ. 5'], ['3', 'Últ. 3']].filter(([k]) => k === 'todos' || +k < nLiga || k === '3');
+  const formaIc = n => { const f = estado.rRango === 'todos' ? formaJugador(n) : null; return f ? ` <span title="${f.t}" style="color:${f.c}; font-size:13px;">${f.ic}</span>` : ''; };
+
+  // Reparto de minutos
+  const porMin = lista.slice().sort((a, b) => b.min - a.min);
+  const maxMin = Math.max(...porMin.map(x => x.min), 1);
+  const mediaIdeal = Math.round(porMin.reduce((s, x) => s + x.min, 0) / porMin.length);
+  const pMed = mediaIdeal / maxMin * 100;
+
+  // Goleadores y asistentes + eficiencia
+  const ga = lista.filter(x => x.goles || x.asist).sort((a, b) => (b.goles + b.asist) - (a.goles + a.asist) || b.goles - a.goles);
+  const psRango = estado.rRango === 'todos' ? liga() : liga().slice(-parseInt(estado.rRango, 10));
+  const minEq = psRango.reduce((s, p) => s + (p.duracion || DUR_DEF), 0), golEq = psRango.reduce((s, p) => s + (p.golesH || 0), 0);
+  const efic = lista.filter(x => x.goles > 0).map(x => ({ ...x, mpg: Math.round(x.min / x.goles) })).sort((a, b) => a.mpg - b.mpg);
+
+  // Posición de mayor impacto (temporada)
+  const posImp = Object.entries(D.historico || {}).map(([nombre, d]) => {
+    const ipp = d.impactoPorPosicion || {}, tot = Object.values(ipp).reduce((s, v) => s + Math.abs(v), 0);
+    if (!tot) return null;
+    let mejor = null, mv = -1; Object.entries(ipp).forEach(([k, v]) => { if (Math.abs(v) > mv) { mv = Math.abs(v); mejor = +k; } });
+    return { nombre, id: mejor, val: ipp[mejor] || 0, pct: Math.round(mv / tot * 100) };
+  }).filter(Boolean).sort((a, b) => b.pct - a.pct);
 
   const porteros = Object.entries(D.historico || {}).filter(([, d]) => (d.minutosPorteria || 0) > 0).map(([nombre, d]) => {
     const pj = d.partidosPorteria || 1, dur = (d.duracionPorteriaAcumulada || pj * DUR_DEF) / pj;
@@ -483,24 +525,53 @@ function pintarRanking() {
     return { nombre, min: d.minutosPorteria, pj: d.partidosPorteria || 0, enc, par, prom: enc * dur / d.minutosPorteria, pct: par + enc > 0 ? Math.round(par / (par + enc) * 100) : null };
   }).sort((a, b) => a.prom - b.prom);
 
-  el.innerHTML = `
+  return `
     <div class="card">
       <div class="card-t"><span>📊 Ranking</span></div>
       <div class="segs">${rangos.map(([k, t]) => `<button class="seg${estado.rRango === k ? ' on' : ''}" data-rango="${k}">${t}</button>`).join('')}</div>
       <select class="sel" id="selCrit" aria-label="Ordenar por">${Object.entries(CRITERIOS).map(([k, x]) => `<option value="${k}"${k === estado.rCrit ? ' selected' : ''}>${x.t}</option>`).join('')}</select>
       ${ok.length ? ok.map((x, i) => `<div class="fila toque" data-jug="${esc(x.nombre)}">
           <span class="pos">${i + 1}</span>${circulo(x.nombre)}
-          <div class="nom">${esc(x.nombre)}<div class="sub">${x.pj} PJ · ${x.min}'</div>
+          <div class="nom">${esc(x.nombre)}${formaIc(x.nombre)}<div class="sub">${x.pj} PJ · ${x.min}'</div>
             <div class="barra" style="margin-top:5px;"><i style="width:${Math.max(3, Math.abs(c.v(x)) / max * 100)}%; ${c.v(x) < 0 ? 'background:var(--rojo);' : ''}"></i></div></div>
           <div class="val">${c.f(x)}</div></div>`).join('')
         : `<div class="vacio">Nadie llega aún a ${MIN_MUESTRA}' en este periodo.</div>`}
-      ${obs.length ? `<div style="margin-top:12px; padding:10px 12px; border:1px dashed rgba(255,255,255,.15); border-radius:12px;">
-          <div class="osw" style="font-weight:600; font-size:12px; letter-spacing:.6px; color:var(--tiza);">EN OBSERVACIÓN</div>
-          <div class="sub" style="margin-bottom:4px;">Menos de ${MIN_MUESTRA}': su media aún no es fiable</div>
-          ${obs.map(x => `<div class="fila toque" data-jug="${esc(x.nombre)}">${circulo(x.nombre)}<div class="nom">${esc(x.nombre)}</div><div class="sub" style="margin:0;">${x.min}'</div></div>`).join('')}
-        </div>` : ''}
-      <div class="nota">${esMedia ? 'Impacto medio = impacto por minuto llevado a la duración de un partido, para comparar igual al que juega mucho y al que juega poco.' : ''} Toca un jugador para ver su ficha.</div>
+      ${obs.length ? bloqueObs('EN OBSERVACIÓN', `Menos de ${MIN_MUESTRA}': su media aún no es fiable`,
+          obs.map(x => `<div class="fila toque" data-jug="${esc(x.nombre)}">${circulo(x.nombre)}<div class="nom">${esc(x.nombre)}</div><div class="sub" style="margin:0;">${x.min}'</div></div>`).join('')) : ''}
+      <div class="nota">${esMedia ? 'Impacto medio = impacto por minuto llevado a la duración de un partido, para comparar igual al que juega mucho y al que juega poco. ' : ''}${estado.rRango === 'todos' ? '📈📉 forma en los últimos partidos. ' : ''}Toca un jugador para ver su ficha.</div>
     </div>
+
+    <div class="card">
+      <div class="card-t"><span>⏱ Reparto de minutos</span><span>media ${mediaIdeal}'</span></div>
+      ${porMin.map(x => { const d = x.min - mediaIdeal; return `<div class="toque" data-jug="${esc(x.nombre)}" style="margin-bottom:9px; cursor:pointer;">
+        <div style="display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:4px;"><b style="color:var(--tiza);">${esc(x.nombre)}</b>
+          <span style="color:var(--gris);"><b style="color:var(--tiza);">${x.min}'</b> <span class="${d >= 0 ? 'pos-v' : 'neg-v'}">(${signo(d)})</span></span></div>
+        <div style="position:relative; height:8px; border-radius:4px; background:rgba(255,255,255,.06);">
+          <div style="position:absolute; left:0; top:0; bottom:0; width:${x.min / maxMin * 100}%; border-radius:4px; background:${d >= 0 ? 'var(--turq)' : '#5f6865'};"></div>
+          <div style="position:absolute; left:${pMed}%; top:-3px; bottom:-3px; width:2px; background:var(--ambar); border-radius:1px;"></div></div></div>`; }).join('')}
+      <div class="nota">La raya amarilla es la media de minutos del grupo (${mediaIdeal}'). En gris, quien está por debajo.</div>
+    </div>
+
+    <div class="card">
+      <div class="card-t"><span>⚽ Goleadores y asistentes</span>${golEq ? `<span>equipo: gol cada ${Math.round(minEq / golEq)}'</span>` : ''}</div>
+      ${ga.length ? `<div class="tabla-wrap"><table class="tb" style="min-width:0;">
+        <thead><tr><th>Jugador</th><th>⚽</th><th>👟</th><th>G+A</th><th>Min/gol</th></tr></thead>
+        <tbody>${ga.map(x => `<tr class="j" data-jug="${esc(x.nombre)}"><td class="n">${esc(x.nombre)}</td><td class="${x.goles ? '' : 'cero-v'}">${x.goles}</td><td class="${x.asist ? '' : 'cero-v'}">${x.asist}</td>
+          <td style="font-weight:800; color:var(--turq);">${x.goles + x.asist}</td><td class="${x.goles ? '' : 'cero-v'}">${x.goles ? Math.round(x.min / x.goles) + "'" : '—'}</td></tr>`).join('')}</tbody></table></div>`
+        : '<div style="font-size:12.5px; color:var(--gris);">Aún no hay goles ni asistencias en este periodo.</div>'}
+      ${efic.length ? `<div class="osw" style="font-weight:600; font-size:12px; letter-spacing:.6px; color:var(--gris); margin:14px 0 4px;">🎯 EFICIENCIA GOLEADORA</div>
+        ${efic.map((x, i) => `<div class="fila toque" data-jug="${esc(x.nombre)}"><span class="pos">${i + 1}</span><div class="nom">${esc(x.nombre)}<div class="sub">${plural(x.goles, 'gol', 'goles')} en ${x.min}'</div></div>
+          <div class="val" style="font-size:15px;">gol cada ${x.mpg}'</div></div>`).join('')}` : ''}
+    </div>
+
+    ${posImp.length ? `<div class="card"><div class="card-t"><span>📍 Posición de mayor impacto</span><span>temporada</span></div>
+      ${posImp.map(x => `<div class="toque" data-jug="${esc(x.nombre)}" style="margin-bottom:10px; cursor:pointer;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:4px;"><b style="font-size:12.5px; color:var(--tiza);">${esc(x.nombre)}</b>
+          <span style="display:flex; align-items:center; gap:6px;"><span style="background:${colorPos(x.id)}; color:#0d0f0f; font-size:10px; font-weight:800; padding:2px 7px; border-radius:5px;">${esc(nombrePos(x.id))}</span>
+          <b class="${colV(x.val)}" style="font-size:13px;">${signo(x.val, 1)}</b></span></div>
+        <div class="barra"><i style="width:${x.pct}%; background:${colorPos(x.id)};"></i></div></div>`).join('')}
+      <div class="nota">La posición donde cada jugador concentra más impacto, y qué parte de su impacto total sale de ahí.</div></div>` : ''}
+
     ${porteros.length ? `<div class="card"><div class="card-t"><span>🧤 Porteros</span><span>goles encajados por partido</span></div>
       ${porteros.map(x => `<div class="fila toque" data-jug="${esc(x.nombre)}">${circulo(x.nombre)}
         <div class="nom">${esc(x.nombre)}<div class="sub">${x.pj} PJ · ${x.min}' · 🧤 ${x.par} paradas · 🥅 ${x.enc} encajados${x.pct != null ? ` · ${x.pct}% paradas` : ''}</div></div>
@@ -508,8 +579,212 @@ function pintarRanking() {
     </div>` : ''}`;
 }
 
+/* Parejas: suma las parejas que guarda cada partido (desde que la app las graba) */
+function parejasTemporada(def) {
+  const acc = {};
+  liga().forEach(p => (p.parejas || []).forEach(x => {
+    const seg = def ? x.segDef : x.seg, imp = def ? x.impDef : x.imp;
+    if (!seg) return;
+    const [a, b] = [x.a, x.b].sort(), k = a + '\u0001' + b;
+    const s = acc[k] || (acc[k] = { a, b, seg: 0, imp: 0, pj: 0, dur: 0 });
+    s.seg += seg; s.imp += imp; s.pj++; s.dur += (p.duracion || DUR_DEF);
+  }));
+  return Object.values(acc).map(s => ({ ...s, min: Math.floor(s.seg / 60), media: s.seg > 0 ? s.imp / (s.seg / 60) * (s.dur / s.pj) : 0 }));
+}
+function htmlParejas() {
+  const def = estado.pVista === 'def';
+  const conDatos = liga().filter(p => Array.isArray(p.parejas) && p.parejas.length).length;
+  const sub = `<div class="segs">${[['gen', '🤝 En el campo'], ['def', '🛡️ En defensa']].map(([k, t]) => `<button class="seg${estado.pVista === k ? ' on' : ''}" data-pvista="${k}">${t}</button>`).join('')}</div>`;
+  if (!conDatos) return `<div class="card">${sub}<div class="vacio"><span class="ic">🤝</span>Las parejas se guardan desde la última versión de la app.<br>Aparecerán aquí en cuanto se grabe el próximo partido.</div></div>`;
+  const todas = parejasTemporada(def);
+  const ok = todas.filter(x => x.min >= MIN_MUESTRA).sort((a, b) => b.media - a.media || b.imp - a.imp);
+  const obs = todas.filter(x => x.min < MIN_MUESTRA && x.min > 0).sort((a, b) => b.min - a.min);
+  const max = Math.max(...ok.map(x => Math.abs(x.media)), 0.01);
+  const nom = x => `${esc(x.a)} <span style="color:var(--gris2)">+</span> ${esc(x.b)}`;
+  return `<div class="card">${sub}
+    <div class="card-t"><span>${def ? '🛡️ Parejas en defensa' : '🤝 Parejas que mejor funcionan'}</span><span>${conDatos} ${conDatos === 1 ? 'partido' : 'partidos'}</span></div>
+    ${ok.length ? ok.slice(0, estado.parTodas ? ok.length : 10).map((x, i) => `<div class="fila"><span class="pos">${i + 1}</span>
+        <div class="nom" style="white-space:normal;">${nom(x)}<div class="sub">${x.min}' juntos · ${x.pj} PJ · impacto ${signo(x.imp, 1)}</div>
+          <div class="barra" style="margin-top:5px;"><i style="width:${Math.max(3, Math.abs(x.media) / max * 100)}%; ${x.media < 0 ? 'background:var(--rojo);' : ''}"></i></div></div>
+        <div class="val ${colV(x.media)}">${signo(x.media, 2)}</div></div>`).join('')
+      : `<div class="vacio">Ninguna pareja llega aún a ${MIN_MUESTRA}' juntos.</div>`}
+    ${ok.length > 10 ? `<button class="seg" style="width:100%; margin-top:10px; padding:10px;" data-partodas="1">${estado.parTodas ? 'Ver solo las 10 mejores' : `Ver todas (${ok.length})`}</button>` : ''}
+    ${obs.length ? bloqueObs('EN OBSERVACIÓN', `Menos de ${MIN_MUESTRA}' juntos`, obs.slice(0, 12).map(x => `<div class="fila"><div class="nom" style="white-space:normal;">${nom(x)}</div><div class="sub" style="margin:0;">${x.min}'</div></div>`).join('')) : ''}
+    <div class="nota">${def ? 'Solo cuenta el tiempo en que los dos juegan a la vez en posiciones defensivas. ' : ''}El número es el impacto de la pareja por partido jugando juntos: goles a favor menos en contra mientras coinciden, llevado a la duración de un partido.</div>
+  </div>`;
+}
+
+/* Asistencia (convocatorias de la app) */
+function datosAsistencia() {
+  const ses = (D.asistencia || []).slice().sort((a, b) => (a.ts || 0) - (b.ts || 0));
+  const st = {};
+  ses.forEach(se => (se.registros || []).forEach(r => {
+    const s = st[r.nombre] || (st[r.nombre] = { si: 0, no: 0, racha: 0 });
+    if (r.concepto === 'asistio') s.si++; else s.no++;
+  }));
+  Object.keys(st).forEach(n => { let r = 0; for (let i = ses.length - 1; i >= 0; i--) { const x = (ses[i].registros || []).find(y => y.nombre === n); if (x && x.concepto === 'asistio') r++; else break; } st[n].racha = r; });
+  return { ses, st };
+}
+function htmlAsistencia() {
+  const { ses, st } = datosAsistencia();
+  if (!ses.length) return `<div class="card vacio"><span class="ic">📋</span>Aún no hay convocatorias registradas.</div>`;
+  const filas = Object.entries(st).map(([n, s]) => ({ n, ...s, tot: s.si + s.no, pct: Math.round(s.si / Math.max(1, s.si + s.no) * 100) }))
+    .sort((a, b) => b.pct - a.pct || b.si - a.si);
+  const maxR = Math.max(...filas.map(f => f.racha), 0);
+  return `<div class="card"><div class="card-t"><span>📋 Asistencia a partidos</span><span>${plural(ses.length, 'convocatoria', 'convocatorias')}</span></div>
+    ${filas.map(f => `<div class="fila toque" data-jug="${esc(f.n)}">${circulo(f.n)}
+      <div class="nom">${esc(f.n)}<div class="sub">✅ ${f.si} · ❌ ${f.no}${f.racha ? ` · racha ${f.racha === maxR ? '🔥' : ''}${f.racha}` : ''}</div>
+        <div class="barra" style="margin-top:5px;"><i style="width:${f.pct}%; background:${f.pct >= 80 ? 'var(--verde)' : f.pct >= 60 ? 'var(--ambar)' : 'var(--rojo)'};"></i></div></div>
+      <div class="val" style="color:var(--tiza);">${f.pct}%</div></div>`).join('')}
+    <div class="nota">Racha: convocatorias seguidas viniendo, hasta hoy.</div></div>
+  <div class="card"><div class="card-t"><span>🗓 Convocatorias</span></div>
+    ${ses.slice().reverse().map(se => { const si = (se.registros || []).filter(r => r.concepto === 'asistio').length, tot = (se.registros || []).length;
+      const faltan = (se.registros || []).filter(r => r.concepto !== 'asistio').map(r => esc(r.nombre));
+      return `<div class="fila"><div class="nom" style="white-space:normal;">⚽ ${esc(se.fecha || '')}<div class="sub">${faltan.length ? '❌ ' + faltan.join(', ') : 'Vinieron todos'}</div></div>
+        <div class="val" style="font-size:15px; color:var(--tiza);">${si}/${tot}</div></div>`; }).join('')}</div>`;
+}
+
+/* ---------- PANEL (gráficas de equipo) ---------- */
+const svgTxt = (x, y, t, o = {}) => `<text x="${x}" y="${y}" text-anchor="${o.a || 'middle'}" font-size="${o.s || 9}" fill="${o.c || '#8b9490'}" font-weight="${o.w || 600}" font-family="Inter,sans-serif">${t}</text>`;
+
+function graficaGoles(ps) {
+  const W = 320, H = 170, L = 22, R = 6, T = 14, B = 22, n = ps.length;
+  const max = Math.max(1, ...ps.map(p => Math.max(p.golesH, p.golesR)));
+  const paso = (W - L - R) / n, bw = Math.min(14, paso / 2 - 3), y = v => T + (1 - v / max) * (H - T - B);
+  let g = '';
+  for (let v = 0; v <= max; v += Math.max(1, Math.ceil(max / 4))) g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="rgba(255,255,255,${v ? .06 : .18})"/>${svgTxt(L - 5, y(v) + 3, v, { a: 'end' })}`;
+  ps.forEach((p, i) => {
+    const cx = L + paso * (i + .5);
+    [[p.golesH, '#43d17a', -1], [p.golesR, '#ff5a5f', 1]].forEach(([v, col, lado]) => {
+      const x = cx + (lado < 0 ? -bw - 1 : 1), h = (H - T - B) - (y(v) - T);
+      if (v > 0) g += `<rect x="${x}" y="${y(v)}" width="${bw}" height="${h}" rx="3" fill="${col}"><title>J${i + 1} vs ${esc(p.rival)}: ${p.golesH}-${p.golesR}</title></rect>`;
+      if (v > 0 && n <= 12) g += svgTxt(x + bw / 2, y(v) - 3, v, { c: '#dfe5e3', s: 9 });
+    });
+    if (n <= 16 || i % 2 === 0) g += svgTxt(cx, H - 7, 'J' + (i + 1));
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Goles a favor y en contra por partido">${g}</svg>
+    <div class="leyenda"><span><i style="background:#43d17a"></i>A favor</span><span><i style="background:#ff5a5f"></i>En contra</span></div>`;
+}
+
+function graficaBalance(ps) {
+  const W = 320, H = 170, L = 26, R = 6, T = 20, B = 24, n = ps.length;
+  const vals = ps.map(p => (p.jugadores || []).reduce((s, j) => s + (j.recuperaciones || 0) - (j.perdidas || 0), 0));
+  const max = Math.max(1, ...vals.map(Math.abs)), paso = (W - L - R) / n, bw = Math.min(22, paso - 6), mid = T + (H - T - B) / 2;
+  const y = v => mid - v / max * ((H - T - B) / 2);
+  let g = `<line x1="${L}" x2="${W - R}" y1="${mid}" y2="${mid}" stroke="rgba(255,255,255,.2)"/>${svgTxt(L - 5, mid + 3, 0, { a: 'end' })}${svgTxt(L - 5, T + 6, '+' + max, { a: 'end' })}${svgTxt(L - 5, H - B, '−' + max, { a: 'end' })}`;
+  vals.forEach((v, i) => {
+    const cx = L + paso * (i + .5);
+    if (v) g += `<rect x="${cx - bw / 2}" y="${Math.min(y(v), mid)}" width="${bw}" height="${Math.abs(y(v) - mid)}" rx="3" fill="${v > 0 ? '#00d9c4' : '#ff5a5f'}"><title>J${i + 1} vs ${esc(ps[i].rival)}: ${signo(v)}</title></rect>`;
+    if (n <= 12) g += svgTxt(cx, v >= 0 ? y(v) - 3 : y(v) + 10, signo(v), { c: '#dfe5e3' });
+    if (n <= 16 || i % 2 === 0) g += svgTxt(cx, H - 7, 'J' + (i + 1));
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Balance de balón del equipo por partido">${g}</svg>
+    <div class="nota" style="margin-top:4px;">Recuperaciones menos pérdidas de todo el equipo en cada partido.</div>`;
+}
+
+function donutPosiciones() {
+  const tot = {};
+  Object.values(D.historico || {}).forEach(d => Object.entries(d.tiemposPorPosicion || {}).forEach(([k, v]) => { tot[k] = (tot[k] || 0) + (v || 0); }));
+  const items = Object.entries(tot).filter(([, v]) => v > 0).map(([k, v]) => ({ id: +k, v })).sort((a, b) => a.id - b.id);
+  const suma = items.reduce((s, x) => s + x.v, 0);
+  if (!suma) return '<div style="font-size:12.5px; color:var(--gris);">Sin datos de posiciones.</div>';
+  const R = 60, r = 36, cx = 70, cy = 70; let ang = -Math.PI / 2, g = '';
+  items.forEach(x => {
+    const a = x.v / suma * Math.PI * 2, a2 = ang + a, big = a > Math.PI ? 1 : 0;
+    const p = (rad, t) => `${(cx + rad * Math.cos(t)).toFixed(2)},${(cy + rad * Math.sin(t)).toFixed(2)}`;
+    g += items.length === 1 ? `<circle cx="${cx}" cy="${cy}" r="${(R + r) / 2}" fill="none" stroke="${colorPos(x.id)}" stroke-width="${R - r}"/>`
+      : `<path d="M${p(R, ang)} A${R},${R} 0 ${big} 1 ${p(R, a2)} L${p(r, a2)} A${r},${r} 0 ${big} 0 ${p(r, ang)} Z" fill="${colorPos(x.id)}" stroke="#17191a" stroke-width="2"><title>${esc(nombrePos(x.id))}: ${Math.round(x.v / 60)}'</title></path>`;
+    ang = a2;
+  });
+  return `<div style="display:flex; align-items:center; gap:14px;"><svg viewBox="0 0 140 140" style="width:46%; max-width:170px; flex-shrink:0;" role="img" aria-label="Minutos por posición">${g}</svg>
+    <div style="flex:1; min-width:0;">${items.map(x => `<div style="display:flex; align-items:center; gap:7px; font-size:12px; padding:3px 0;">
+      <i style="width:10px; height:10px; border-radius:3px; background:${colorPos(x.id)}; flex-shrink:0;"></i><span style="flex:1; color:var(--tiza); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(nombrePos(x.id))}</span>
+      <span style="color:var(--gris);">${Math.round(x.v / suma * 100)}%</span></div>`).join('')}</div></div>`;
+}
+
+function htmlTramos(ps) {
+  const con = ps.filter(p => Array.isArray(p.golesMin) && p.golesMin.length);
+  if (!con.length) return '<div style="font-size:12.5px; color:var(--gris);">Todavía no hay partidos con el minuto de los goles.</div>';
+  let maxMin = 0; con.forEach(p => { maxMin = Math.max(maxMin, p.duracion || 0); p.golesMin.forEach(g => { maxMin = Math.max(maxMin, g.min); }); });
+  const nT = Math.max(1, Math.ceil(maxMin / 5)), tr = Array.from({ length: nT }, (_, i) => ({ d: i * 5 + 1, h: i * 5 + 5, f: 0, c: 0 }));
+  con.forEach(p => p.golesMin.forEach(g => { const t = tr[Math.min(nT - 1, Math.floor((Math.max(1, g.min) - 1) / 5))]; if (g.t === 'F') t.f++; else t.c++; }));
+  const maxV = Math.max(1, ...tr.map(t => Math.max(t.f, t.c))), alto = 52;
+  const cols = tr.map(t => `<div style="flex:1; min-width:0; display:flex; flex-direction:column; align-items:center;">
+    <div style="height:${alto}px; width:100%; display:flex; flex-direction:column; justify-content:flex-end; align-items:center;">${t.f ? `<span style="font-size:10px; font-weight:800; color:var(--verde);">${t.f}</span>` : ''}<div style="width:70%; height:${Math.round(t.f / maxV * (alto - 14))}px; background:#43d17a; border-radius:3px 3px 0 0;"></div></div>
+    <div style="width:100%; border-top:1px solid rgba(255,255,255,.3);"></div>
+    <div style="height:${alto}px; width:100%; display:flex; flex-direction:column; align-items:center;"><div style="width:70%; height:${Math.round(t.c / maxV * (alto - 14))}px; background:#ff5a5f; border-radius:0 0 3px 3px;"></div>${t.c ? `<span style="font-size:10px; font-weight:800; color:var(--rojo);">${t.c}</span>` : ''}</div>
+    <div style="font-size:9px; color:var(--gris2); white-space:nowrap;">${t.h}'</div></div>`).join('');
+  const mejorF = [...tr].sort((a, b) => b.f - a.f)[0], peorC = [...tr].sort((a, b) => b.c - a.c)[0];
+  const mitad = Math.ceil(tr.length / 2), sum = (a, k) => a.reduce((s, t) => s + t[k], 0), p1 = tr.slice(0, mitad), p2 = tr.slice(mitad), ult = tr.slice(-2);
+  const lect = [];
+  if (mejorF.f) lect.push(`Más goles a favor entre el ${mejorF.d}' y el ${mejorF.h}' (${mejorF.f}).`);
+  if (peorC.c) lect.push(`Más goles encajados entre el ${peorC.d}' y el ${peorC.h}' (${peorC.c}).`);
+  lect.push(`1ª parte ${sum(p1, 'f')}-${sum(p1, 'c')} · 2ª parte ${sum(p2, 'f')}-${sum(p2, 'c')}.`);
+  if (sum(ult, 'c') || sum(ult, 'f')) lect.push(`Últimos 10 minutos: ${sum(ult, 'f')} a favor y ${sum(ult, 'c')} en contra.`);
+  return `<div class="leyenda" style="justify-content:space-between; margin:0 0 6px;"><span><i style="background:#43d17a"></i>A favor (arriba) · <i style="background:#ff5a5f"></i>En contra</span><span>${con.length}/${ps.length} partidos</span></div>
+    <div style="display:flex; gap:2px;">${cols}</div>
+    <div style="font-size:12.5px; line-height:1.55; margin-top:10px; color:var(--texto);">${lect.join('<br>')}</div>`;
+}
+
+function htmlNivelRival(ps) {
+  const orden = ['muy-superior', 'superior', 'similar', 'inferior', 'muy-inferior'];
+  const et = { 'muy-superior': '🔥 Muy superior', superior: '💪 Superior', similar: '⚖️ Parecido', inferior: '📉 Asequible', 'muy-inferior': '🟢 Muy asequible' };
+  const g = {}; ps.filter(p => p.nivelRival).forEach(p => { const x = g[p.nivelRival] || (g[p.nivelRival] = { v: 0, e: 0, d: 0, gf: 0, gc: 0 }); x[res(p).toLowerCase()]++; x.gf += p.golesH; x.gc += p.golesR; });
+  const filas = orden.filter(k => g[k]);
+  if (!filas.length) return '<div style="font-size:12.5px; color:var(--gris);">Aún no hay partidos con el nivel del rival.</div>';
+  return filas.map(k => { const x = g[k], t = x.v + x.e + x.d;
+    return `<div style="margin-bottom:11px;"><div style="display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:4px;"><b style="color:var(--tiza);">${et[k]}</b><span style="color:var(--gris);">${plural(t, 'partido', 'partidos')} · ${x.gf}-${x.gc}</span></div>
+      <div style="display:flex; gap:2px; height:10px; border-radius:5px; overflow:hidden; background:rgba(255,255,255,.05);">${x.v ? `<div style="flex:${x.v}; background:#43d17a;"></div>` : ''}${x.e ? `<div style="flex:${x.e}; background:#9aa3a0;"></div>` : ''}${x.d ? `<div style="flex:${x.d}; background:#ff5a5f;"></div>` : ''}</div>
+      <div class="sub">${x.v}V ${x.e}E ${x.d}D</div></div>`; }).join('')
+    + (ps.length - ps.filter(p => p.nivelRival).length ? `<div class="nota">${ps.length - ps.filter(p => p.nivelRival).length} partido(s) sin nivel del rival.</div>` : '');
+}
+
+function htmlTarjetas(ps) {
+  let p1a = 0, p1r = 0, p2a = 0, p2r = 0;
+  ps.forEach(p => (p.tarjetas || []).forEach(t => { const seg = t.minuto > (p.duracion || DUR_DEF) / 2; if (t.tipo === 'TARJETA_RO') { seg ? p2r++ : p1r++; } else { seg ? p2a++ : p1a++; } }));
+  const conNombre = Object.entries(D.historico || {}).filter(([, d]) => d.tarjetasAm || d.tarjetasRo).sort((a, b) => ((b[1].tarjetasRo || 0) * 3 + (b[1].tarjetasAm || 0)) - ((a[1].tarjetasRo || 0) * 3 + (a[1].tarjetasAm || 0)));
+  if (!(p1a + p1r + p2a + p2r) && !conNombre.length) return '<div style="font-size:12.5px; color:var(--gris);">Sin tarjetas en la temporada.</div>';
+  return `<div class="grid3" style="grid-template-columns:1fr 1fr;"><div class="box"><div class="v">🟨 ${p1a} · 🟥 ${p1r}</div><div class="l">1ª parte</div></div><div class="box"><div class="v">🟨 ${p2a} · 🟥 ${p2r}</div><div class="l">2ª parte</div></div></div>
+    ${conNombre.map(([n, d]) => `<div class="fila toque" data-jug="${esc(n)}">${circulo(n)}<div class="nom">${esc(n)}</div><div class="val" style="font-size:15px; color:var(--tiza);">${d.tarjetasAm ? '🟨 ' + d.tarjetasAm : ''} ${d.tarjetasRo ? '🟥 ' + d.tarjetasRo : ''}</div></div>`).join('')}`;
+}
+
+function pintarPanel() {
+  const el = document.getElementById('p-panel');
+  const ps = liga();
+  if (!ps.length) { el.innerHTML = `<div class="card vacio"><span class="ic">📈</span>El panel aparecerá cuando haya partidos grabados.</div>`; return; }
+  el.innerHTML = `
+    <div class="card"><div class="card-t"><span>⚽ Goles por partido</span></div>${graficaGoles(ps)}</div>
+    <div class="card"><div class="card-t"><span>🔄 Balance de balón del equipo</span></div>${graficaBalance(ps)}</div>
+    <div class="card"><div class="card-t"><span>🧭 Minutos por posición</span><span>temporada</span></div>${donutPosiciones()}</div>
+    <div class="card"><div class="card-t"><span>⏱ Goles por tramos de 5 minutos</span></div>${htmlTramos(ps)}</div>
+    <div class="card"><div class="card-t"><span>🎯 Según el nivel del rival</span></div>${htmlNivelRival(ps)}</div>
+    <div class="card"><div class="card-t"><span>🟨 Tarjetas</span></div>${htmlTarjetas(ps)}</div>`;
+}
+
 /* ---------- FICHA DE JUGADOR (temporada) ---------- */
+const EVO_MET = { impacto: ['Impacto', j => j.impacto || 0], minutos: ['Minutos', j => j.minutos || 0], goles: ['Goles', j => j.goles || 0], asistencias: ['Asistencias', j => j.asistencias || 0], balance: ['Balance de balón', j => (j.recuperaciones || 0) - (j.perdidas || 0)] };
+function graficaEvolucion(nombre, met) {
+  const ps = liga(), f = EVO_MET[met][1];
+  const pts = ps.map((p, i) => { const j = (p.jugadores || []).find(y => y.nombre === nombre); return { i, p, v: j ? f(j) : null }; });
+  const jug = pts.filter(x => x.v !== null);
+  if (jug.length < 2) return '<div style="font-size:12.5px; color:var(--gris); padding:6px 0;">Hace falta más de un partido jugado para ver su evolución.</div>';
+  const W = 320, H = 150, L = 26, R = 8, T = 12, B = 22, n = ps.length;
+  const vals = jug.map(x => x.v), mn = Math.min(0, ...vals), mx = Math.max(1, ...vals);
+  const x = k => n === 1 ? (L + W - R) / 2 : L + k / (n - 1) * (W - L - R), y = v => T + (1 - (v - mn) / (mx - mn)) * (H - T - B);
+  const media = vals.reduce((s, v) => s + v, 0) / vals.length;
+  let g = '';
+  [mn, (mn + mx) / 2, mx].forEach(v => { g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="rgba(255,255,255,${v === 0 ? .18 : .06})"/>${svgTxt(L - 5, y(v) + 3, num(v, Number.isInteger(v) ? 0 : 1), { a: 'end' })}`; });
+  g += `<line x1="${L}" x2="${W - R}" y1="${y(media)}" y2="${y(media)}" stroke="#ffb020" stroke-width="1.5" stroke-dasharray="4 4"/>`;
+  g += `<polyline fill="none" stroke="#00d9c4" stroke-width="2" stroke-linejoin="round" points="${jug.map(z => `${x(z.i).toFixed(1)},${y(z.v).toFixed(1)}`).join(' ')}"/>`;
+  jug.forEach(z => { g += `<circle cx="${x(z.i)}" cy="${y(z.v)}" r="4.5" fill="#00d9c4" stroke="#202425" stroke-width="2"><title>J${z.i + 1} vs ${esc(z.p.rival)}: ${num(z.v, 1)}</title></circle>`; });
+  ps.forEach((p, k) => { if (n <= 12 || k % 2 === 0) g += svgTxt(x(k), H - 7, 'J' + (k + 1)); });
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Evolución de ${esc(nombre)}">${g}</svg>
+    <div class="leyenda"><span><i style="background:#00d9c4"></i>${EVO_MET[met][0]} por partido</span><span><i style="background:#ffb020"></i>Su media (${num(media, 1)})</span></div>
+    ${jug.length < ps.length ? `<div class="nota" style="margin-top:4px;">Sin punto: partidos que no jugó.</div>` : ''}`;
+}
+
 function abrirJugador(nombre) {
+  estado.jug = nombre;
   const d = (D.historico || {})[nombre] || {};
   const x = listaTemporada('todos').find(y => y.nombre === nombre) || { pj:0, min:0, goles:0, asist:0, imp:0, media:0, recuperaciones:0, perdidas:0, tiros:0, pm:0 };
   const forma = formaJugador(nombre);
@@ -519,6 +794,8 @@ function abrirJugador(nombre) {
   const pos = Object.entries(tp).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
   const mvps = hist.filter(z => { const m = mvpDe(z.p); return m && m.nombre === nombre; }).length;
   const minGol = x.goles > 0 ? Math.round(x.min / x.goles) : null;
+  const socios = parejasTemporada(false).filter(p => (p.a === nombre || p.b === nombre) && p.min >= MIN_MUESTRA).sort((a, b) => b.media - a.media).slice(0, 3);
+  const asi = datosAsistencia().st[nombre];
 
   document.getElementById('mJugadorC').innerHTML = `
     <div class="modal-h">${circulo(nombre)}
@@ -537,12 +814,19 @@ function abrirJugador(nombre) {
         <div class="fila"><div class="nom">🔄 Balance de balón<div class="sub">✅ ${x.recuperaciones} recuperaciones · ❌ ${x.perdidas} pérdidas</div></div><div class="val ${colV(x.recuperaciones - x.perdidas)}">${signo(x.recuperaciones - x.perdidas)}</div></div>
         <div class="fila"><div class="nom">➕ +/- con él en el campo</div><div class="val ${colV(x.pm)}">${signo(x.pm)}</div></div>
         ${minGol ? `<div class="fila"><div class="nom">⏱ Minutos por gol</div><div class="val">${minGol}'</div></div>` : ''}
+        ${asi ? `<div class="fila"><div class="nom">📋 Asistencia<div class="sub">✅ ${asi.si} · ❌ ${asi.no}</div></div><div class="val" style="color:var(--tiza);">${Math.round(asi.si / Math.max(1, asi.si + asi.no) * 100)}%</div></div>` : ''}
         ${(d.tarjetasAm || d.tarjetasRo) ? `<div class="fila"><div class="nom">Tarjetas</div><div class="val" style="color:var(--tiza)">🟨 ${d.tarjetasAm || 0} · 🟥 ${d.tarjetasRo || 0}</div></div>` : ''}
         ${(d.minutosPorteria || 0) > 0 ? `<div class="fila"><div class="nom">🧤 En portería<div class="sub">${d.partidosPorteria || 0} PJ · ${d.minutosPorteria}' · ${d.paradasPorteria || 0} paradas · ${d.golesEncajadosPorteria || 0} encajados</div></div></div>` : ''}
       </div>
+      <div class="card"><div class="card-t"><span>📈 Evolución</span></div>
+        <select class="sel" id="selEvo" aria-label="Dato de la evolución">${Object.entries(EVO_MET).map(([k, [t]]) => `<option value="${k}"${k === estado.evMet ? ' selected' : ''}>${t}</option>`).join('')}</select>
+        <div id="evoGraf">${graficaEvolucion(nombre, estado.evMet)}</div>
+      </div>
+      ${socios.length ? `<div class="card"><div class="card-t"><span>🤝 Con quién funciona mejor</span></div>
+        ${socios.map(p => { const otro = p.a === nombre ? p.b : p.a; return `<div class="fila toque" data-jug="${esc(otro)}">${circulo(otro)}<div class="nom">${esc(otro)}<div class="sub">${p.min}' juntos</div></div><div class="val ${colV(p.media)}">${signo(p.media, 2)}</div></div>`; }).join('')}</div>` : ''}
       ${pos.length ? `<div class="card"><div class="card-t"><span>🧭 Dónde juega</span></div>
         ${pos.map(([id, s]) => { const pc = Math.round(s / totS * 100);
-          return `<div style="margin-bottom:9px;"><div style="display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:4px;"><b style="color:var(--tiza);">${esc(nombrePos(+id))}</b><span style="color:var(--gris);">${Math.round(s / 60)}' · ${pc}%</span></div><div class="barra"><i style="width:${pc}%"></i></div></div>`; }).join('')}</div>` : ''}
+          return `<div style="margin-bottom:9px;"><div style="display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:4px;"><b style="color:var(--tiza);">${esc(nombrePos(+id))}</b><span style="color:var(--gris);">${Math.round(s / 60)}' · ${pc}%</span></div><div class="barra"><i style="width:${pc}%; background:${colorPos(+id)};"></i></div></div>`; }).join('')}</div>` : ''}
       <div class="card"><div class="card-t"><span>📅 Partido a partido</span><span>impacto</span></div>
         ${hist.length ? hist.map(z => { const v = z.j.impacto || 0, m = mvpDe(z.p);
           const extra = [z.j.goles ? `⚽${z.j.goles > 1 ? '×' + z.j.goles : ''}` : '', z.j.asistencias ? `👟${z.j.asistencias > 1 ? '×' + z.j.asistencias : ''}` : '', m && m.nombre === nombre ? '⭐ MVP' : ''].filter(Boolean).join(' ');
@@ -564,29 +848,36 @@ function pintarMvp() {
   if (!ps.length) { el.innerHTML = `<div class="card vacio"><span class="ic">🌟</span>El MVP se decide cada 4 partidos de liga.<br>Aparecerá en cuanto se grabe el primero.</div>`; return; }
   const bloques = [];
   for (let i = 0; i < ps.length; i += 4) bloques.push(ps.slice(i, i + 4));
+  const actual = bloques[bloques.length - 1], enCursoAct = actual.length < 4;
+  const bal = rankingBloque(actual).filter(x => x.rec || x.per).sort((a, b) => (b.rec - b.per) - (a.rec - a.per)).slice(0, 3);
+  const med = ['🥇', '🥈', '🥉'];
+  const topBal = bal.length ? `<div class="card" style="background:linear-gradient(135deg,rgba(0,137,123,.35),rgba(0,105,92,.2)); border-color:rgba(0,217,196,.3);">
+    <div class="card-t" style="color:var(--turq);"><span>🎯 Top 3 balance de balón</span><span>${enCursoAct ? 'bloque en curso' : 'último bloque'}</span></div>
+    ${bal.map((x, i) => `<div class="fila toque" data-jug="${esc(x.nombre)}"><span style="font-size:18px; width:22px; text-align:center;">${med[i]}</span><div class="nom">${esc(x.nombre)}<div class="sub">✅ ${x.rec} · ❌ ${x.per}</div></div><div class="val">${signo(x.rec - x.per)}</div></div>`).join('')}
+  </div>` : '';
   const bloque = (b, n) => {
     const r = rankingBloque(b), enCurso = b.length < 4;
     if (!r.length) return '';
-    const med = ['🥇', '🥈', '🥉'];
+    const fImp = x => `<span style="color:#64b5f6; font-size:12.5px; margin-right:8px;">${signo(x.imp, 1)} imp</span>`;
     return `<div class="card" style="${enCurso ? '' : 'border-color:rgba(0,217,196,.25);'}">
       <div class="card-t"><span>Bloque ${n}${enCurso ? ` · en curso (${b.length}/4)` : ''}</span><span>${esc(b[0].fecha || '')}${!enCurso ? ' → ' + esc(b[3].fecha || '') : ''}</span></div>
       <div class="fila toque" data-jug="${esc(r[0].nombre)}" style="background:${enCurso ? 'rgba(255,255,255,.03)' : 'rgba(0,217,196,.08)'}; border-radius:12px; padding:12px 10px;">
         <span style="font-size:24px;">${enCurso ? '📈' : '🏅'}</span>
         <div class="nom" style="font-size:15px;">${esc(r[0].nombre)}<div class="sub">${enCurso ? 'Va líder' : 'MVP del bloque'} · ⚽ ${r[0].goles} · 👟 ${r[0].asist} · ${r[0].min}'</div></div>
-        <div class="val">${signo(r[0].media, 2)}</div></div>
-      ${r.slice(1, 5).map((x, i) => `<div class="fila toque" data-jug="${esc(x.nombre)}"><span class="pos">${med[i + 1] || i + 2}</span>
-        <div class="nom">${esc(x.nombre)}<div class="sub">${x.pj} PJ · ${x.min}'</div></div><div class="val" style="font-size:15px; color:var(--tiza);">${signo(x.media, 2)}</div></div>`).join('')}
+        <div style="text-align:right;"><div class="val">${signo(r[0].media, 2)} <span style="font-size:11px; color:var(--gris);">med</span></div><div style="color:#64b5f6; font-size:12.5px; font-weight:700;">${signo(r[0].imp, 1)} imp</div></div></div>
+      ${r.slice(1).map((x, i) => `<div class="fila toque" data-jug="${esc(x.nombre)}"><span class="pos">${med[i + 1] || i + 2}</span>
+        <div class="nom">${esc(x.nombre)}<div class="sub">${x.pj} PJ · ${x.min}'</div></div>${fImp(x)}<div class="val" style="font-size:15px; color:var(--tiza);">${signo(x.media, 2)}</div></div>`).join('')}
       <div class="sub" style="margin-top:8px;">${b.map(p => `vs ${esc(p.rival)} ${p.golesH}–${p.golesR}`).join(' · ')}</div>
     </div>`;
   };
-  el.innerHTML = `<div class="aviso" style="color:var(--texto); background:rgba(0,217,196,.06); border-color:rgba(0,217,196,.25);">🌟 Cada 4 partidos de liga se elige un MVP: el jugador con mejor impacto medio en ese bloque.</div>`
-    + bloques.map((b, i) => ({ b, n: i + 1 })).reverse().map(x => bloque(x.b, x.n)).join('');
+  el.innerHTML = `<div class="aviso" style="color:var(--texto); background:rgba(0,217,196,.06); border-color:rgba(0,217,196,.25);">🌟 Cada 4 partidos de liga se elige un MVP: el jugador con mejor impacto medio (med) en ese bloque. En azul, su impacto total (imp).</div>`
+    + topBal + bloques.map((b, i) => ({ b, n: i + 1 })).reverse().map(x => bloque(x.b, x.n)).join('');
 }
 
 /* ---------- navegación y modales ---------- */
 function pintarTodo() {
   if (!D) return;
-  pintarResumen(); pintarPartidos(); pintarRanking(); pintarMvp();
+  pintarResumen(); pintarPartidos(); pintarRanking(); pintarPanel(); pintarMvp();
   // si hay un modal abierto, se refresca con los datos nuevos
   if (document.getElementById('mPartido').classList.contains('abierto') && estado.ficha) abrirPartido(estado.ficha.idx);
 }
@@ -612,8 +903,14 @@ document.addEventListener('click', e => {
   const pa = t.closest('[data-partido]'); if (pa) { abrirPartido(+pa.dataset.partido); return; }
   const ju = t.closest('[data-jug]'); if (ju) { abrirJugador(ju.dataset.jug); return; }
   const ra = t.closest('[data-rango]'); if (ra) { estado.rRango = ra.dataset.rango; pintarRanking(); return; }
+  const rv = t.closest('[data-rvista]'); if (rv) { estado.rVista = rv.dataset.rvista; pintarRanking(); return; }
+  const pt = t.closest('[data-partodas]'); if (pt) { estado.parTodas = !estado.parTodas; pintarRanking(); return; }
+  const pv = t.closest('[data-pvista]'); if (pv) { estado.pVista = pv.dataset.pvista; pintarRanking(); return; }
 });
-document.addEventListener('change', e => { if (e.target.id === 'selCrit') { estado.rCrit = e.target.value; pintarRanking(); } });
+document.addEventListener('change', e => {
+  if (e.target.id === 'selCrit') { estado.rCrit = e.target.value; pintarRanking(); }
+  if (e.target.id === 'selEvo') { estado.evMet = e.target.value; document.getElementById('evoGraf').innerHTML = graficaEvolucion(estado.jug, estado.evMet); }
+});
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { const m = [...document.querySelectorAll('.modal.abierto')].pop(); if (m) cerrar(m.id); } });
 
 /* ---------- DIRECTO ---------- */
