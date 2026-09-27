@@ -12,6 +12,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Bodyking FC — Visor</title>
 <meta name="theme-color" content="#0d0f0f">
+<script>try { document.documentElement.setAttribute('data-tema', localStorage.getItem('bk_tema') || 'claro'); } catch (e) { document.documentElement.setAttribute('data-tema', 'claro'); }</script>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -24,7 +25,23 @@
   :root {
     --ink:#0d0f0f; --ink2:#17191a; --ink3:#202425; --linea:rgba(255,255,255,.07);
     --turq:#00d9c4; --turq-osc:#00332c; --tiza:#f4f6f5; --texto:#dfe5e3; --gris:#8b9490; --gris2:#5f6865;
-    --verde:#43d17a; --rojo:#ff5a5f; --ambar:#ffb020;
+    --verde:#43d17a; --rojo:#ff5a5f; --ambar:#ffb020; --azul:#64b5f6; --morado:#b388ff;
+    --sutil:rgba(255,255,255,.05); --sutil2:rgba(255,255,255,.15); --reja:rgba(255,255,255,.06); --reja0:rgba(255,255,255,.2);
+    --sombra:none;
+  }
+  /* Tema claro (por defecto): como la app */
+  html[data-tema="claro"] {
+    --ink:#f0f2f5; --ink2:#ffffff; --ink3:#f5f7f7; --linea:rgba(0,0,0,.08);
+    --turq:#00897b; --turq-osc:#ffffff; --tiza:#1a1d1e; --texto:#33393b; --gris:#5f6865; --gris2:#8b9490;
+    --verde:#2e9e5b; --rojo:#d93a3f; --ambar:#b7791f; --azul:#1976d2; --morado:#7e57c2;
+    --sutil:rgba(0,0,0,.04); --sutil2:rgba(0,0,0,.14); --reja:rgba(0,0,0,.07); --reja0:rgba(0,0,0,.25);
+    --sombra:0 1px 4px rgba(0,0,0,.07);
+  }
+  /* Zonas que siempre van oscuras, como en la app: cabecera, marcador, barra inferior y cabeceras de las fichas */
+  .cab, .marcador, .tabbar, .modal-h {
+    --ink:#0d0f0f; --ink2:#17191a; --ink3:#202425; --linea:rgba(255,255,255,.07);
+    --turq:#00d9c4; --turq-osc:#00332c; --tiza:#f4f6f5; --texto:#dfe5e3; --gris:#8b9490; --gris2:#5f6865;
+    --sutil:rgba(255,255,255,.05); --sutil2:rgba(255,255,255,.15);
   }
   * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
   html { -webkit-text-size-adjust:100%; }
@@ -36,10 +53,12 @@
 
   /* Cabecera */
   .cab { background:var(--ink2); border:3px solid var(--turq); border-radius:16px; padding:14px; display:flex; align-items:center; gap:12px; margin-bottom:12px; }
+  .card { box-shadow:var(--sombra); }
+  .tema-btn { border:1px solid var(--turq); color:var(--turq); background:rgba(0,217,196,.08); cursor:pointer; margin-left:0; font-size:12px !important; }
   .cab img { width:52px; height:52px; border-radius:10px; object-fit:contain; background:#fff; flex-shrink:0; }
   .cab-t { font-family:'Oswald',sans-serif; font-weight:700; font-size:19px; color:var(--tiza); letter-spacing:.5px; text-transform:uppercase; line-height:1.1; }
   .cab-s { font-size:11px; color:var(--gris); margin-top:3px; }
-  .cab-tag { margin-left:auto; align-self:flex-start; font-size:9.5px; font-weight:700; color:var(--gris); background:rgba(255,255,255,.05); padding:3px 7px; border-radius:6px; white-space:nowrap; }
+  .cab-tag { margin-left:auto; align-self:flex-start; font-size:9.5px; font-weight:700; color:var(--gris); background:var(--sutil); padding:3px 7px; border-radius:6px; white-space:nowrap; }
 
   /* Tarjetas */
   .card { background:var(--ink2); border:1px solid var(--linea); border-radius:14px; padding:13px; margin-bottom:10px; }
@@ -55,18 +74,18 @@
   .box .l { font-size:9.5px; color:var(--gris); font-weight:700; text-transform:uppercase; letter-spacing:.3px; margin-top:3px; }
 
   .bola { width:26px; height:26px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-family:'Oswald',sans-serif; font-weight:700; font-size:12px; color:var(--ink); }
-  .bola.V { background:var(--verde); } .bola.E { background:#9aa3a0; } .bola.D { background:var(--rojo); color:#fff; }
+  .bola.V { background:var(--verde); } .bola.E { background:var(--gris2); } .bola.D { background:var(--rojo); color:#fff; }
 
   .chip-res { font-family:'Oswald',sans-serif; font-weight:700; font-size:15px; padding:4px 10px; border-radius:8px; white-space:nowrap; }
   .chip-res.V { background:rgba(67,209,122,.14); color:var(--verde); }
-  .chip-res.E { background:rgba(255,255,255,.07); color:#c3cbc8; }
+  .chip-res.E { background:var(--sutil); color:var(--gris); }
   .chip-res.D { background:rgba(255,90,95,.14); color:var(--rojo); }
 
   /* Filas */
   .fila { display:flex; align-items:center; gap:10px; padding:10px 2px; border-top:1px solid var(--linea); }
   .fila:first-child { border-top:none; }
   .fila.toque { cursor:pointer; }
-  .fila.toque:active { background:rgba(255,255,255,.03); }
+  .fila.toque:active { background:var(--sutil); }
   .dorsal { width:28px; height:28px; border-radius:50%; flex-shrink:0; background:var(--turq-osc); border:1.5px solid var(--turq); color:var(--turq); display:flex; align-items:center; justify-content:center; font-family:'Oswald',sans-serif; font-weight:700; font-size:12px; }
   .nom { flex:1; min-width:0; font-weight:700; font-size:13.5px; color:var(--tiza); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .sub { font-size:11px; color:var(--gris); font-weight:500; margin-top:2px; white-space:normal; }
@@ -84,7 +103,7 @@
   .seg.on { background:var(--turq); color:var(--turq-osc); border-color:var(--turq); }
   select.sel { width:100%; padding:10px; border-radius:10px; background:var(--ink3); color:var(--tiza); border:1px solid var(--linea); font-size:13px; font-family:inherit; margin-bottom:10px; }
 
-  .barra { height:6px; border-radius:3px; background:rgba(255,255,255,.06); overflow:hidden; }
+  .barra { height:6px; border-radius:3px; background:var(--sutil); overflow:hidden; }
   .barra i { display:block; height:100%; border-radius:3px; background:var(--turq); }
 
   /* Tabla ficha */
@@ -106,7 +125,7 @@
   .golmin .F { background:rgba(67,209,122,.15); color:var(--verde); }
   .golmin .C { background:rgba(255,90,95,.14); color:var(--rojo); }
 
-  details.ia summary { font-family:'Oswald',sans-serif; font-weight:600; font-size:13px; letter-spacing:.4px; color:#b388ff; cursor:pointer; list-style:none; }
+  details.ia summary { font-family:'Oswald',sans-serif; font-weight:600; font-size:13px; letter-spacing:.4px; color:var(--morado); cursor:pointer; list-style:none; }
   details.ia summary::-webkit-details-marker { display:none; }
   details.ia .txt { white-space:pre-wrap; font-size:12.5px; line-height:1.6; color:var(--texto); margin-top:10px; }
 
@@ -114,11 +133,11 @@
   .modal { position:fixed; inset:0; z-index:900; background:rgba(0,0,0,.78); overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; padding:14px 10px 30px; display:none; }
   .modal.abierto { display:block; }
   .modal-c { max-width:480px; margin:0 auto; background:var(--ink2); border-radius:18px; overflow:hidden; border-top:4px solid var(--turq); }
-  .modal-h { display:flex; align-items:center; gap:10px; padding:14px; background:var(--ink); }
+  .modal-h { background:#0d0f0f !important; display:flex; align-items:center; gap:10px; padding:14px; background:var(--ink); }
   .modal-h .t { flex:1; min-width:0; }
   .modal-h .t1 { font-family:'Oswald',sans-serif; font-weight:700; font-size:18px; color:var(--tiza); line-height:1.15; }
   .modal-h .t2 { font-size:11.5px; color:var(--gris); margin-top:3px; line-height:1.4; }
-  .cerrar { width:38px; height:38px; flex-shrink:0; border-radius:10px; border:1px solid var(--linea); background:rgba(255,255,255,.05); color:var(--tiza); font-size:17px; }
+  .cerrar { width:38px; height:38px; flex-shrink:0; border-radius:10px; border:1px solid var(--linea); background:var(--sutil); color:var(--tiza); font-size:17px; }
   .modal-b { padding:12px; }
   .modal-b .card { background:var(--ink3); }
   .modal-b .box { background:var(--ink); }
@@ -148,7 +167,7 @@
   .marc-fila { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:10px; }
   .marc-eq { font-family:'Oswald',sans-serif; font-weight:700; font-size:14px; text-transform:uppercase; letter-spacing:.4px; color:var(--gris); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .marc-eq.bk { color:var(--turq); }
-  .marc-g { font-family:'Oswald',sans-serif; font-weight:700; font-size:46px; color:#fff; line-height:1; white-space:nowrap; }
+  .marc-g { font-family:'Oswald',sans-serif; font-weight:700; font-size:46px; color:var(--tiza); line-height:1; white-space:nowrap; }
   .marc-reloj { font-family:'Oswald',sans-serif; font-weight:600; font-size:20px; color:#ffeb3b; margin-top:8px; letter-spacing:1px; }
   .campo { position:relative; width:100%; aspect-ratio:3/4; border-radius:14px; overflow:hidden; background:repeating-linear-gradient(0deg,#16432a 0 40px,#1a4d31 40px 80px); border:1px solid rgba(255,255,255,.1); }
   .campo .lin { position:absolute; left:0; right:0; top:50%; height:1px; background:rgba(255,255,255,.3); }
@@ -191,6 +210,7 @@
     </div>
     <div style="margin-left:auto; align-self:flex-start; display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
       <span class="cab-tag" style="margin-left:0;">👁️ SOLO LECTURA</span>
+      <button id="btnTema" class="cab-tag tema-btn" aria-label="Cambiar entre tema claro y oscuro">🌙</button>
       <button id="btnInstalar" class="cab-tag" style="display:none; border:1px solid var(--turq); color:var(--turq); background:rgba(0,217,196,.08); margin-left:0;">📲 INSTALAR</button>
     </div>
   </div>
@@ -332,7 +352,7 @@ function pintarResumen() {
       <div class="card-t"><span>🏆 Temporada</span><span>${plural(ps.length, 'partido', 'partidos')}</span></div>
       <div class="grid3">
         <div class="box"><div class="v" style="color:var(--verde)">${V}</div><div class="l">Ganados</div></div>
-        <div class="box"><div class="v" style="color:#c3cbc8">${E}</div><div class="l">Empatados</div></div>
+        <div class="box"><div class="v" style="color:var(--gris)">${E}</div><div class="l">Empatados</div></div>
         <div class="box"><div class="v" style="color:var(--rojo)">${Dr}</div><div class="l">Perdidos</div></div>
       </div>
       <div class="grid3" style="margin-top:6px;">
@@ -474,8 +494,8 @@ const CRITERIOS = {
   pj:     { t: '📋 Partidos jugados', v: x => x.pj, f: x => x.pj }
 };
 const COLOR_POS = ['#29b6f6', '#43a047', '#43a047', '#e53935', '#fdd835', '#e53935', '#8e5cd9'];
-const colorPos = id => COLOR_POS[id] || '#8b9490';
-const bloqueObs = (titulo, sub, filas) => `<div style="margin-top:12px; padding:10px 12px; border:1px dashed rgba(255,255,255,.15); border-radius:12px;">
+const colorPos = id => COLOR_POS[id] || 'var(--gris)';
+const bloqueObs = (titulo, sub, filas) => `<div style="margin-top:12px; padding:10px 12px; border:1px dashed var(--sutil2); border-radius:12px;">
   <div class="osw" style="font-weight:600; font-size:12px; letter-spacing:.6px; color:var(--tiza);">${titulo}</div>
   <div class="sub" style="margin-bottom:4px;">${sub}</div>${filas}</div>`;
 
@@ -546,8 +566,8 @@ function htmlRankingJugadores() {
       ${porMin.map(x => { const d = x.min - mediaIdeal; return `<div class="toque" data-jug="${esc(x.nombre)}" style="margin-bottom:9px; cursor:pointer;">
         <div style="display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:4px;"><b style="color:var(--tiza);">${esc(x.nombre)}</b>
           <span style="color:var(--gris);"><b style="color:var(--tiza);">${x.min}'</b> <span class="${d >= 0 ? 'pos-v' : 'neg-v'}">(${signo(d)})</span></span></div>
-        <div style="position:relative; height:8px; border-radius:4px; background:rgba(255,255,255,.06);">
-          <div style="position:absolute; left:0; top:0; bottom:0; width:${x.min / maxMin * 100}%; border-radius:4px; background:${d >= 0 ? 'var(--turq)' : '#5f6865'};"></div>
+        <div style="position:relative; height:8px; border-radius:4px; background:var(--sutil);">
+          <div style="position:absolute; left:0; top:0; bottom:0; width:${x.min / maxMin * 100}%; border-radius:4px; background:${d >= 0 ? 'var(--turq)' : 'var(--gris2)'};"></div>
           <div style="position:absolute; left:${pMed}%; top:-3px; bottom:-3px; width:2px; background:var(--ambar); border-radius:1px;"></div></div></div>`; }).join('')}
       <div class="nota">La raya amarilla es la media de minutos del grupo (${mediaIdeal}'). En gris, quien está por debajo.</div>
     </div>
@@ -645,25 +665,25 @@ function htmlAsistencia() {
 }
 
 /* ---------- PANEL (gráficas de equipo) ---------- */
-const svgTxt = (x, y, t, o = {}) => `<text x="${x}" y="${y}" text-anchor="${o.a || 'middle'}" font-size="${o.s || 9}" fill="${o.c || '#8b9490'}" font-weight="${o.w || 600}" font-family="Inter,sans-serif">${t}</text>`;
+const svgTxt = (x, y, t, o = {}) => `<text x="${x}" y="${y}" text-anchor="${o.a || 'middle'}" font-size="${o.s || 9}" style="fill:${o.c || 'var(--gris)'}" font-weight="${o.w || 600}" font-family="Inter,sans-serif">${t}</text>`;
 
 function graficaGoles(ps) {
   const W = 320, H = 170, L = 22, R = 6, T = 14, B = 22, n = ps.length;
   const max = Math.max(1, ...ps.map(p => Math.max(p.golesH, p.golesR)));
   const paso = (W - L - R) / n, bw = Math.min(14, paso / 2 - 3), y = v => T + (1 - v / max) * (H - T - B);
   let g = '';
-  for (let v = 0; v <= max; v += Math.max(1, Math.ceil(max / 4))) g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="rgba(255,255,255,${v ? .06 : .18})"/>${svgTxt(L - 5, y(v) + 3, v, { a: 'end' })}`;
+  for (let v = 0; v <= max; v += Math.max(1, Math.ceil(max / 4))) g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" style="stroke:var(${v ? '--reja' : '--reja0'})"/>${svgTxt(L - 5, y(v) + 3, v, { a: 'end' })}`;
   ps.forEach((p, i) => {
     const cx = L + paso * (i + .5);
-    [[p.golesH, '#43d17a', -1], [p.golesR, '#ff5a5f', 1]].forEach(([v, col, lado]) => {
+    [[p.golesH, 'var(--verde)', -1], [p.golesR, 'var(--rojo)', 1]].forEach(([v, col, lado]) => {
       const x = cx + (lado < 0 ? -bw - 1 : 1), h = (H - T - B) - (y(v) - T);
-      if (v > 0) g += `<rect x="${x}" y="${y(v)}" width="${bw}" height="${h}" rx="3" fill="${col}"><title>J${i + 1} vs ${esc(p.rival)}: ${p.golesH}-${p.golesR}</title></rect>`;
-      if (v > 0 && n <= 12) g += svgTxt(x + bw / 2, y(v) - 3, v, { c: '#dfe5e3', s: 9 });
+      if (v > 0) g += `<rect x="${x}" y="${y(v)}" width="${bw}" height="${h}" rx="3" style="fill:${col}"><title>J${i + 1} vs ${esc(p.rival)}: ${p.golesH}-${p.golesR}</title></rect>`;
+      if (v > 0 && n <= 12) g += svgTxt(x + bw / 2, y(v) - 3, v, { c: 'var(--tiza)', s: 9 });
     });
     if (n <= 16 || i % 2 === 0) g += svgTxt(cx, H - 7, 'J' + (i + 1));
   });
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Goles a favor y en contra por partido">${g}</svg>
-    <div class="leyenda"><span><i style="background:#43d17a"></i>A favor</span><span><i style="background:#ff5a5f"></i>En contra</span></div>`;
+    <div class="leyenda"><span><i style="background:var(--verde)"></i>A favor</span><span><i style="background:var(--rojo)"></i>En contra</span></div>`;
 }
 
 function graficaBalance(ps) {
@@ -671,11 +691,11 @@ function graficaBalance(ps) {
   const vals = ps.map(p => (p.jugadores || []).reduce((s, j) => s + (j.recuperaciones || 0) - (j.perdidas || 0), 0));
   const max = Math.max(1, ...vals.map(Math.abs)), paso = (W - L - R) / n, bw = Math.min(22, paso - 6), mid = T + (H - T - B) / 2;
   const y = v => mid - v / max * ((H - T - B) / 2);
-  let g = `<line x1="${L}" x2="${W - R}" y1="${mid}" y2="${mid}" stroke="rgba(255,255,255,.2)"/>${svgTxt(L - 5, mid + 3, 0, { a: 'end' })}${svgTxt(L - 5, T + 6, '+' + max, { a: 'end' })}${svgTxt(L - 5, H - B, '−' + max, { a: 'end' })}`;
+  let g = `<line x1="${L}" x2="${W - R}" y1="${mid}" y2="${mid}" style="stroke:var(--reja0)"/>${svgTxt(L - 5, mid + 3, 0, { a: 'end' })}${svgTxt(L - 5, T + 6, '+' + max, { a: 'end' })}${svgTxt(L - 5, H - B, '−' + max, { a: 'end' })}`;
   vals.forEach((v, i) => {
     const cx = L + paso * (i + .5);
-    if (v) g += `<rect x="${cx - bw / 2}" y="${Math.min(y(v), mid)}" width="${bw}" height="${Math.abs(y(v) - mid)}" rx="3" fill="${v > 0 ? '#00d9c4' : '#ff5a5f'}"><title>J${i + 1} vs ${esc(ps[i].rival)}: ${signo(v)}</title></rect>`;
-    if (n <= 12) g += svgTxt(cx, v >= 0 ? y(v) - 3 : y(v) + 10, signo(v), { c: '#dfe5e3' });
+    if (v) g += `<rect x="${cx - bw / 2}" y="${Math.min(y(v), mid)}" width="${bw}" height="${Math.abs(y(v) - mid)}" rx="3" style="fill:${v > 0 ? 'var(--turq)' : 'var(--rojo)'}"><title>J${i + 1} vs ${esc(ps[i].rival)}: ${signo(v)}</title></rect>`;
+    if (n <= 12) g += svgTxt(cx, v >= 0 ? y(v) - 3 : y(v) + 10, signo(v), { c: 'var(--tiza)' });
     if (n <= 16 || i % 2 === 0) g += svgTxt(cx, H - 7, 'J' + (i + 1));
   });
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Balance de balón del equipo por partido">${g}</svg>
@@ -693,7 +713,7 @@ function donutPosiciones() {
     const a = x.v / suma * Math.PI * 2, a2 = ang + a, big = a > Math.PI ? 1 : 0;
     const p = (rad, t) => `${(cx + rad * Math.cos(t)).toFixed(2)},${(cy + rad * Math.sin(t)).toFixed(2)}`;
     g += items.length === 1 ? `<circle cx="${cx}" cy="${cy}" r="${(R + r) / 2}" fill="none" stroke="${colorPos(x.id)}" stroke-width="${R - r}"/>`
-      : `<path d="M${p(R, ang)} A${R},${R} 0 ${big} 1 ${p(R, a2)} L${p(r, a2)} A${r},${r} 0 ${big} 0 ${p(r, ang)} Z" fill="${colorPos(x.id)}" stroke="#17191a" stroke-width="2"><title>${esc(nombrePos(x.id))}: ${Math.round(x.v / 60)}'</title></path>`;
+      : `<path d="M${p(R, ang)} A${R},${R} 0 ${big} 1 ${p(R, a2)} L${p(r, a2)} A${r},${r} 0 ${big} 0 ${p(r, ang)} Z" fill="${colorPos(x.id)}" style="stroke:var(--ink2)" stroke-width="2"><title>${esc(nombrePos(x.id))}: ${Math.round(x.v / 60)}'</title></path>`;
     ang = a2;
   });
   return `<div style="display:flex; align-items:center; gap:14px;"><svg viewBox="0 0 140 140" style="width:46%; max-width:170px; flex-shrink:0;" role="img" aria-label="Minutos por posición">${g}</svg>
@@ -710,9 +730,9 @@ function htmlTramos(ps) {
   con.forEach(p => p.golesMin.forEach(g => { const t = tr[Math.min(nT - 1, Math.floor((Math.max(1, g.min) - 1) / 5))]; if (g.t === 'F') t.f++; else t.c++; }));
   const maxV = Math.max(1, ...tr.map(t => Math.max(t.f, t.c))), alto = 52;
   const cols = tr.map(t => `<div style="flex:1; min-width:0; display:flex; flex-direction:column; align-items:center;">
-    <div style="height:${alto}px; width:100%; display:flex; flex-direction:column; justify-content:flex-end; align-items:center;">${t.f ? `<span style="font-size:10px; font-weight:800; color:var(--verde);">${t.f}</span>` : ''}<div style="width:70%; height:${Math.round(t.f / maxV * (alto - 14))}px; background:#43d17a; border-radius:3px 3px 0 0;"></div></div>
-    <div style="width:100%; border-top:1px solid rgba(255,255,255,.3);"></div>
-    <div style="height:${alto}px; width:100%; display:flex; flex-direction:column; align-items:center;"><div style="width:70%; height:${Math.round(t.c / maxV * (alto - 14))}px; background:#ff5a5f; border-radius:0 0 3px 3px;"></div>${t.c ? `<span style="font-size:10px; font-weight:800; color:var(--rojo);">${t.c}</span>` : ''}</div>
+    <div style="height:${alto}px; width:100%; display:flex; flex-direction:column; justify-content:flex-end; align-items:center;">${t.f ? `<span style="font-size:10px; font-weight:800; color:var(--verde);">${t.f}</span>` : ''}<div style="width:70%; height:${Math.round(t.f / maxV * (alto - 14))}px; background:var(--verde); border-radius:3px 3px 0 0;"></div></div>
+    <div style="width:100%; border-top:1px solid var(--sutil2);"></div>
+    <div style="height:${alto}px; width:100%; display:flex; flex-direction:column; align-items:center;"><div style="width:70%; height:${Math.round(t.c / maxV * (alto - 14))}px; background:var(--rojo); border-radius:0 0 3px 3px;"></div>${t.c ? `<span style="font-size:10px; font-weight:800; color:var(--rojo);">${t.c}</span>` : ''}</div>
     <div style="font-size:9px; color:var(--gris2); white-space:nowrap;">${t.h}'</div></div>`).join('');
   const mejorF = [...tr].sort((a, b) => b.f - a.f)[0], peorC = [...tr].sort((a, b) => b.c - a.c)[0];
   const mitad = Math.ceil(tr.length / 2), sum = (a, k) => a.reduce((s, t) => s + t[k], 0), p1 = tr.slice(0, mitad), p2 = tr.slice(mitad), ult = tr.slice(-2);
@@ -721,7 +741,7 @@ function htmlTramos(ps) {
   if (peorC.c) lect.push(`Más goles encajados entre el ${peorC.d}' y el ${peorC.h}' (${peorC.c}).`);
   lect.push(`1ª parte ${sum(p1, 'f')}-${sum(p1, 'c')} · 2ª parte ${sum(p2, 'f')}-${sum(p2, 'c')}.`);
   if (sum(ult, 'c') || sum(ult, 'f')) lect.push(`Últimos 10 minutos: ${sum(ult, 'f')} a favor y ${sum(ult, 'c')} en contra.`);
-  return `<div class="leyenda" style="justify-content:space-between; margin:0 0 6px;"><span><i style="background:#43d17a"></i>A favor (arriba) · <i style="background:#ff5a5f"></i>En contra</span><span>${con.length}/${ps.length} partidos</span></div>
+  return `<div class="leyenda" style="justify-content:space-between; margin:0 0 6px;"><span><i style="background:var(--verde)"></i>A favor (arriba) · <i style="background:var(--rojo)"></i>En contra</span><span>${con.length}/${ps.length} partidos</span></div>
     <div style="display:flex; gap:2px;">${cols}</div>
     <div style="font-size:12.5px; line-height:1.55; margin-top:10px; color:var(--texto);">${lect.join('<br>')}</div>`;
 }
@@ -734,7 +754,7 @@ function htmlNivelRival(ps) {
   if (!filas.length) return '<div style="font-size:12.5px; color:var(--gris);">Aún no hay partidos con el nivel del rival.</div>';
   return filas.map(k => { const x = g[k], t = x.v + x.e + x.d;
     return `<div style="margin-bottom:11px;"><div style="display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:4px;"><b style="color:var(--tiza);">${et[k]}</b><span style="color:var(--gris);">${plural(t, 'partido', 'partidos')} · ${x.gf}-${x.gc}</span></div>
-      <div style="display:flex; gap:2px; height:10px; border-radius:5px; overflow:hidden; background:rgba(255,255,255,.05);">${x.v ? `<div style="flex:${x.v}; background:#43d17a;"></div>` : ''}${x.e ? `<div style="flex:${x.e}; background:#9aa3a0;"></div>` : ''}${x.d ? `<div style="flex:${x.d}; background:#ff5a5f;"></div>` : ''}</div>
+      <div style="display:flex; gap:2px; height:10px; border-radius:5px; overflow:hidden; background:var(--sutil);">${x.v ? `<div style="flex:${x.v}; background:var(--verde);"></div>` : ''}${x.e ? `<div style="flex:${x.e}; background:var(--gris);"></div>` : ''}${x.d ? `<div style="flex:${x.d}; background:var(--rojo);"></div>` : ''}</div>
       <div class="sub">${x.v}V ${x.e}E ${x.d}D</div></div>`; }).join('')
     + (ps.length - ps.filter(p => p.nivelRival).length ? `<div class="nota">${ps.length - ps.filter(p => p.nivelRival).length} partido(s) sin nivel del rival.</div>` : '');
 }
@@ -773,13 +793,13 @@ function graficaEvolucion(nombre, met) {
   const x = k => n === 1 ? (L + W - R) / 2 : L + k / (n - 1) * (W - L - R), y = v => T + (1 - (v - mn) / (mx - mn)) * (H - T - B);
   const media = vals.reduce((s, v) => s + v, 0) / vals.length;
   let g = '';
-  [mn, (mn + mx) / 2, mx].forEach(v => { g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="rgba(255,255,255,${v === 0 ? .18 : .06})"/>${svgTxt(L - 5, y(v) + 3, num(v, Number.isInteger(v) ? 0 : 1), { a: 'end' })}`; });
-  g += `<line x1="${L}" x2="${W - R}" y1="${y(media)}" y2="${y(media)}" stroke="#ffb020" stroke-width="1.5" stroke-dasharray="4 4"/>`;
-  g += `<polyline fill="none" stroke="#00d9c4" stroke-width="2" stroke-linejoin="round" points="${jug.map(z => `${x(z.i).toFixed(1)},${y(z.v).toFixed(1)}`).join(' ')}"/>`;
-  jug.forEach(z => { g += `<circle cx="${x(z.i)}" cy="${y(z.v)}" r="4.5" fill="#00d9c4" stroke="#202425" stroke-width="2"><title>J${z.i + 1} vs ${esc(z.p.rival)}: ${num(z.v, 1)}</title></circle>`; });
+  [mn, (mn + mx) / 2, mx].forEach(v => { g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" style="stroke:var(${v === 0 ? '--reja0' : '--reja'})"/>${svgTxt(L - 5, y(v) + 3, num(v, Number.isInteger(v) ? 0 : 1), { a: 'end' })}`; });
+  g += `<line x1="${L}" x2="${W - R}" y1="${y(media)}" y2="${y(media)}" style="stroke:var(--ambar)" stroke-width="1.5" stroke-dasharray="4 4"/>`;
+  g += `<polyline fill="none" style="stroke:var(--turq)" stroke-width="2" stroke-linejoin="round" points="${jug.map(z => `${x(z.i).toFixed(1)},${y(z.v).toFixed(1)}`).join(' ')}"/>`;
+  jug.forEach(z => { g += `<circle cx="${x(z.i)}" cy="${y(z.v)}" r="4.5" style="fill:var(--turq); stroke:var(--ink3)" stroke-width="2"><title>J${z.i + 1} vs ${esc(z.p.rival)}: ${num(z.v, 1)}</title></circle>`; });
   ps.forEach((p, k) => { if (n <= 12 || k % 2 === 0) g += svgTxt(x(k), H - 7, 'J' + (k + 1)); });
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Evolución de ${esc(nombre)}">${g}</svg>
-    <div class="leyenda"><span><i style="background:#00d9c4"></i>${EVO_MET[met][0]} por partido</span><span><i style="background:#ffb020"></i>Su media (${num(media, 1)})</span></div>
+    <div class="leyenda"><span><i style="background:var(--turq)"></i>${EVO_MET[met][0]} por partido</span><span><i style="background:var(--ambar)"></i>Su media (${num(media, 1)})</span></div>
     ${jug.length < ps.length ? `<div class="nota" style="margin-top:4px;">Sin punto: partidos que no jugó.</div>` : ''}`;
 }
 
@@ -858,13 +878,13 @@ function pintarMvp() {
   const bloque = (b, n) => {
     const r = rankingBloque(b), enCurso = b.length < 4;
     if (!r.length) return '';
-    const fImp = x => `<span style="color:#64b5f6; font-size:12.5px; margin-right:8px;">${signo(x.imp, 1)} imp</span>`;
+    const fImp = x => `<span style="color:var(--azul); font-size:12.5px; margin-right:8px;">${signo(x.imp, 1)} imp</span>`;
     return `<div class="card" style="${enCurso ? '' : 'border-color:rgba(0,217,196,.25);'}">
       <div class="card-t"><span>Bloque ${n}${enCurso ? ` · en curso (${b.length}/4)` : ''}</span><span>${esc(b[0].fecha || '')}${!enCurso ? ' → ' + esc(b[3].fecha || '') : ''}</span></div>
-      <div class="fila toque" data-jug="${esc(r[0].nombre)}" style="background:${enCurso ? 'rgba(255,255,255,.03)' : 'rgba(0,217,196,.08)'}; border-radius:12px; padding:12px 10px;">
+      <div class="fila toque" data-jug="${esc(r[0].nombre)}" style="background:${enCurso ? 'var(--sutil)' : 'rgba(0,217,196,.08)'}; border-radius:12px; padding:12px 10px;">
         <span style="font-size:24px;">${enCurso ? '📈' : '🏅'}</span>
         <div class="nom" style="font-size:15px;">${esc(r[0].nombre)}<div class="sub">${enCurso ? 'Va líder' : 'MVP del bloque'} · ⚽ ${r[0].goles} · 👟 ${r[0].asist} · ${r[0].min}'</div></div>
-        <div style="text-align:right;"><div class="val">${signo(r[0].media, 2)} <span style="font-size:11px; color:var(--gris);">med</span></div><div style="color:#64b5f6; font-size:12.5px; font-weight:700;">${signo(r[0].imp, 1)} imp</div></div></div>
+        <div style="text-align:right;"><div class="val">${signo(r[0].media, 2)} <span style="font-size:11px; color:var(--gris);">med</span></div><div style="color:var(--azul); font-size:12.5px; font-weight:700;">${signo(r[0].imp, 1)} imp</div></div></div>
       ${r.slice(1).map((x, i) => `<div class="fila toque" data-jug="${esc(x.nombre)}"><span class="pos">${med[i + 1] || i + 2}</span>
         <div class="nom">${esc(x.nombre)}<div class="sub">${x.pj} PJ · ${x.min}'</div></div>${fImp(x)}<div class="val" style="font-size:15px; color:var(--tiza);">${signo(x.media, 2)}</div></div>`).join('')}
       <div class="sub" style="margin-top:8px;">${b.map(p => `vs ${esc(p.rival)} ${p.golesH}–${p.golesR}`).join(' · ')}</div>
@@ -1069,6 +1089,16 @@ function cargarDatos(obj) {
   cabecera(); pintarTodo();
 }
 window.__cargarDatos = cargarDatos; // para pruebas
+
+/* ---------- Tema claro / oscuro (se recuerda en cada móvil) ---------- */
+function ponerIconoTema() { document.getElementById('btnTema').textContent = document.documentElement.getAttribute('data-tema') === 'oscuro' ? '☀️' : '🌙'; }
+document.getElementById('btnTema').addEventListener('click', () => {
+  const nuevo = document.documentElement.getAttribute('data-tema') === 'oscuro' ? 'claro' : 'oscuro';
+  document.documentElement.setAttribute('data-tema', nuevo);
+  try { localStorage.setItem('bk_tema', nuevo); } catch (e) {}
+  ponerIconoTema();
+});
+ponerIconoTema();
 
 /* ---------- PWA: instalable en el móvil ---------- */
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
