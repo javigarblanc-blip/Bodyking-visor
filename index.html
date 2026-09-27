@@ -702,26 +702,6 @@ function graficaBalance(ps) {
     <div class="nota" style="margin-top:4px;">Recuperaciones menos pérdidas de todo el equipo en cada partido.</div>`;
 }
 
-function donutPosiciones() {
-  const tot = {};
-  Object.values(D.historico || {}).forEach(d => Object.entries(d.tiemposPorPosicion || {}).forEach(([k, v]) => { tot[k] = (tot[k] || 0) + (v || 0); }));
-  const items = Object.entries(tot).filter(([, v]) => v > 0).map(([k, v]) => ({ id: +k, v })).sort((a, b) => a.id - b.id);
-  const suma = items.reduce((s, x) => s + x.v, 0);
-  if (!suma) return '<div style="font-size:12.5px; color:var(--gris);">Sin datos de posiciones.</div>';
-  const R = 60, r = 36, cx = 70, cy = 70; let ang = -Math.PI / 2, g = '';
-  items.forEach(x => {
-    const a = x.v / suma * Math.PI * 2, a2 = ang + a, big = a > Math.PI ? 1 : 0;
-    const p = (rad, t) => `${(cx + rad * Math.cos(t)).toFixed(2)},${(cy + rad * Math.sin(t)).toFixed(2)}`;
-    g += items.length === 1 ? `<circle cx="${cx}" cy="${cy}" r="${(R + r) / 2}" fill="none" stroke="${colorPos(x.id)}" stroke-width="${R - r}"/>`
-      : `<path d="M${p(R, ang)} A${R},${R} 0 ${big} 1 ${p(R, a2)} L${p(r, a2)} A${r},${r} 0 ${big} 0 ${p(r, ang)} Z" fill="${colorPos(x.id)}" style="stroke:var(--ink2)" stroke-width="2"><title>${esc(nombrePos(x.id))}: ${Math.round(x.v / 60)}'</title></path>`;
-    ang = a2;
-  });
-  return `<div style="display:flex; align-items:center; gap:14px;"><svg viewBox="0 0 140 140" style="width:46%; max-width:170px; flex-shrink:0;" role="img" aria-label="Minutos por posición">${g}</svg>
-    <div style="flex:1; min-width:0;">${items.map(x => `<div style="display:flex; align-items:center; gap:7px; font-size:12px; padding:3px 0;">
-      <i style="width:10px; height:10px; border-radius:3px; background:${colorPos(x.id)}; flex-shrink:0;"></i><span style="flex:1; color:var(--tiza); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(nombrePos(x.id))}</span>
-      <span style="color:var(--gris);">${Math.round(x.v / suma * 100)}%</span></div>`).join('')}</div></div>`;
-}
-
 function htmlTramos(ps) {
   const con = ps.filter(p => Array.isArray(p.golesMin) && p.golesMin.length);
   if (!con.length) return '<div style="font-size:12.5px; color:var(--gris);">Todavía no hay partidos con el minuto de los goles.</div>';
@@ -775,7 +755,6 @@ function pintarPanel() {
   el.innerHTML = `
     <div class="card"><div class="card-t"><span>⚽ Goles por partido</span></div>${graficaGoles(ps)}</div>
     <div class="card"><div class="card-t"><span>🔄 Balance de balón del equipo</span></div>${graficaBalance(ps)}</div>
-    <div class="card"><div class="card-t"><span>🧭 Minutos por posición</span><span>temporada</span></div>${donutPosiciones()}</div>
     <div class="card"><div class="card-t"><span>⏱ Goles por tramos de 5 minutos</span></div>${htmlTramos(ps)}</div>
     <div class="card"><div class="card-t"><span>🎯 Según el nivel del rival</span></div>${htmlNivelRival(ps)}</div>
     <div class="card"><div class="card-t"><span>🟨 Tarjetas</span></div>${htmlTarjetas(ps)}</div>`;
