@@ -195,6 +195,16 @@
   .tab { font-size:10.5px; letter-spacing:.2px; }
   .tab .ic { font-size:18px; }
 
+  .info { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; margin-left:4px; border-radius:50%; border:1px solid var(--turq);
+    background:none; color:var(--turq); font-size:11px; font-weight:800; font-family:'Inter',sans-serif; line-height:1; padding:0; vertical-align:1px; text-transform:none; letter-spacing:0; }
+  .cab .tema-btn[data-guia] { font-size:12px !important; min-width:30px; }
+  .guia p, .guia li { font-size:13px; line-height:1.55; color:var(--texto); margin-bottom:6px; }
+  .guia ul { padding-left:18px; margin-bottom:6px; }
+  .guia b { color:var(--tiza); }
+  .guia .ej { background:var(--sutil); border-radius:8px; padding:8px 10px; font-size:12.5px; }
+  .guia section { scroll-margin-top:12px; transition:box-shadow .3s; }
+  .guia section.marca { box-shadow:0 0 0 2px var(--turq); }
+
   .pie { text-align:center; font-size:10px; color:var(--gris2); margin:16px 0 4px; line-height:1.5; }
   .pie a { color:inherit; }
   .aviso { background:rgba(255,176,32,.08); border:1px solid rgba(255,176,32,.3); color:var(--ambar); border-radius:12px; padding:10px 12px; font-size:12px; line-height:1.5; margin-bottom:10px; }
@@ -210,12 +220,14 @@
     </div>
     <div style="margin-left:auto; align-self:flex-start; display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
       <span class="cab-tag" style="margin-left:0;">👁️ SOLO LECTURA</span>
-      <button id="btnTema" class="cab-tag tema-btn" aria-label="Cambiar entre tema claro y oscuro">🌙</button>
+      <div style="display:flex; gap:6px;"><button class="cab-tag tema-btn" data-guia="" aria-label="Cómo se calcula cada dato">ⓘ</button>
+      <button id="btnTema" class="cab-tag tema-btn" aria-label="Cambiar entre tema claro y oscuro">🌙</button></div>
       <button id="btnInstalar" class="cab-tag" style="display:none; border:1px solid var(--turq); color:var(--turq); background:rgba(0,217,196,.08); margin-left:0;">📲 INSTALAR</button>
     </div>
   </div>
 
   <div id="avisoConfig"></div>
+  <div id="avisoGuia"></div>
   <div id="bandaVivo"></div>
 
   <section class="panel" id="p-directo"></section>
@@ -240,6 +252,7 @@
 <div id="golAviso" role="status" aria-live="polite"><div class="a">⚽ ¡GOOOL DE BODYKING!</div><div class="b" id="golAvisoB"></div></div>
 <div class="modal" id="mPartido"><div class="modal-c" id="mPartidoC"></div></div>
 <div class="modal" id="mJugador" style="z-index:910;"><div class="modal-c" id="mJugadorC"></div></div>
+<div class="modal" id="mGuia"><div class="modal-c" id="mGuiaC"></div></div>
 <div class="modal" id="mDetalle" style="z-index:920;"><div class="modal-c" id="mDetalleC"></div></div>
 
 <script>
@@ -335,6 +348,49 @@ function rachasPorteria() {
   return { actual, max, sinDatos };
 }
 
+/* ---------- GUÍA: ¿cómo se calcula? ---------- */
+const info = k => `<button class="info" data-guia="${k}" aria-label="Cómo se calcula">ⓘ</button>`;
+const GUIA = [
+  ['impacto', '⭐ Impacto', `<p>Mide lo que pasa en el marcador mientras juegas.</p>
+    <ul><li><b>+1</b> por cada gol del equipo con él en el campo · <b>−1</b> por cada gol en contra.</li>
+    <li><b>+1 más</b> si marca él y <b>+0,5</b> si da la asistencia.</li>
+    <li><b>Porteros:</b> los goles a favor valen <b>+0,5</b> mientras está en portería (juega todo el partido y, si no, sumaría casi siempre más que nadie). Cada parada suma <b>+0,4</b>, sin tope.</li>
+    <li><b>Bonus de portería:</b> portero y defensas con 10' o más en esas posiciones suman <b>+2</b> si no encajamos y <b>+1</b> si encajamos solo uno.</li>
+    <li>En un partido no puede bajar de <b>−5</b>.</li></ul>
+    <p class="ej">Ejemplo: Manu estuvo en el campo en 5 goles a favor, marcó 3 y dio 1 asistencia → 5 + 3 + 0,5 = <b>+8,5</b>.<br>
+    Héctor, de portero en el 8-1: 8 × 0,5 − 1 + 1 de bonus + 4 paradas × 0,4 = <b>+5,6</b>.</p>
+    <p>Recuperaciones, pérdidas y tiros no cuentan: se ven aparte en el balance de balón.</p>`],
+  ['media', '📊 Impacto medio por partido', `<p>El impacto repartido por los minutos jugados y llevado a un partido entero. Sirve para comparar igual al que juega 20' que al que juega 50'.</p>
+    <p class="ej">Impacto ÷ minutos × duración del partido. Ángel: +10,5 en 34' → 10,5 / 34 × 50 = <b>+15,4</b>.</p>
+    <p>Quien no llega a <b>${MIN_MUESTRA}'</b> queda «en observación»: con tan pocos minutos, la media no es fiable.</p>`],
+  ['pm', '➕ +/-', `<p>Goles a favor menos goles en contra mientras está en el campo. Si entra con 0-0 y el equipo marca 2 y encaja 1 mientras juega, su +/- es <b>+1</b>.</p>`],
+  ['balance', '🔄 Balance de balón', `<p>Recuperaciones menos pérdidas. En el equipo, se suma el de todos los jugadores en cada partido.</p><p>No cuenta en el impacto: sirve para ver quién gana y quién pierde balones.</p>`],
+  ['mvp', '🌟 MVP', `<ul><li><b>Del partido:</b> el jugador con más impacto en ese partido. Si hay empate, desempatan los goles y luego las asistencias.</li>
+    <li><b>Del bloque:</b> cada 4 partidos de liga, el de mejor impacto medio en esos 4. Mientras el bloque no se cierra, aparece como «va líder».</li></ul>`],
+  ['parejas', '🤝 Parejas', `<p>Cómo le va al equipo cuando dos jugadores coinciden en el campo: goles a favor menos en contra mientras juegan juntos, llevado a un partido entero.</p>
+    <p><b>En defensa</b> cuenta solo el tiempo en que los dos están a la vez en posiciones defensivas.</p><p>Hace falta un mínimo de <b>${MIN_MUESTRA}' juntos</b> para entrar en la lista.</p>`],
+  ['porteros', '🧤 Porteros y rachas', `<ul><li><b>Goles por partido:</b> goles encajados en portería llevados a un partido entero.</li>
+    <li><b>% paradas:</b> paradas ÷ (paradas + goles encajados).</li>
+    <li><b>Racha actual:</b> minutos sin encajar desde el último gol recibido. Sigue sumando en el partido siguiente hasta que nos marquen.</li>
+    <li><b>Mejor racha:</b> la más larga de la temporada.</li></ul>`],
+  ['forma', '📈 Forma y evolución', `<p>La flecha compara el impacto de sus últimos partidos con los de justo antes: 📈 en alza, ➖ estable, 📉 en baja.</p><p>La gráfica de evolución muestra un dato partido a partido; la raya amarilla es su media.</p>`],
+  ['minutos', '⏱ Reparto de minutos', `<p>Minutos jugados por cada uno. La raya amarilla es la media del grupo: la barra turquesa está por encima y la gris por debajo.</p>`],
+  ['goleadores', '⚽ Goleadores y eficiencia', `<p><b>G+A</b>: goles más asistencias. <b>Min/gol</b> y <b>gol cada X'</b>: minutos jugados de media por cada gol (cuanto menos, más goleador).</p>`],
+  ['posicion', '📍 Posición de mayor impacto', `<p>La posición donde cada jugador ha sumado más impacto en la temporada. La barra indica qué parte de su impacto total sale de ahí.</p>`],
+  ['asistencia', '📋 Asistencia', `<p>Porcentaje de convocatorias a las que ha venido. La <b>racha</b> son las convocatorias seguidas viniendo hasta hoy; 🔥 marca la más larga del grupo.</p>`],
+  ['tramos', '⏱ Goles por tramos', `<p>En qué momento del partido marcamos (verde, arriba) y encajamos (rojo, abajo), en tramos de 5 minutos y sumando toda la temporada.</p>`],
+  ['rival', '🎯 Según el nivel del rival', `<p>Victorias, empates y derrotas según cómo era el rival (superior, parecido o asequible). El nivel lo pone el analista al terminar cada partido.</p>`],
+  ['directo', '🔴 Directo', `<p>Se actualiza solo mientras se juega. En <b>Lo que va pasando</b> salen goles, tarjetas, cambios, tiros y paradas. Las recuperaciones y pérdidas solo se ven como totales en la tabla.</p><p><b>Sin encajar</b> son los minutos desde el último gol recibido, contando los del partido anterior.</p>`]
+];
+function abrirGuia(k) {
+  document.getElementById('mGuiaC').innerHTML = `
+    <div class="modal-h"><div class="t"><div class="t1">ⓘ ¿Cómo se calcula?</div><div class="t2">Qué significa cada número del visor</div></div>
+      <button class="cerrar" data-cerrar="mGuia" aria-label="Cerrar">✕</button></div>
+    <div class="modal-b guia">${GUIA.map(([id, t, h]) => `<section class="card" id="g-${id}"><div class="card-t"><span>${t}</span></div>${h}</section>`).join('')}</div>`;
+  abrir('mGuia');
+  if (k) { const el = document.getElementById('g-' + k); if (el) { setTimeout(() => { el.scrollIntoView({ block: 'start' }); el.classList.add('marca'); setTimeout(() => el.classList.remove('marca'), 1600); }, 30); } }
+}
+
 /* ---------- RESUMEN ---------- */
 function pintarResumen() {
   const el = document.getElementById('p-resumen');
@@ -381,12 +437,12 @@ function pintarResumen() {
       </div>
     </div>
     <div class="card">
-      <div class="card-t"><span>⭐ Destacados de la temporada</span></div>
+      <div class="card-t"><span>⭐ Destacados de la temporada ${info('impacto')}</span></div>
       ${lider('⚽', 'Máximo goleador', goleador, goleador ? goleador.goles : '')}
       ${lider('👟', 'Más asistencias', asistente, asistente ? asistente.asist : '')}
       ${lider('📊', 'Mejor impacto medio por partido', media, media ? signo(media.media, 2) : '')}
       ${lider('🔄', 'Mejor balance de balón', balance, balance ? signo(balance.recuperaciones - balance.perdidas) : '')}
-      <div class="nota">Toca un jugador para ver su ficha. El impacto medio solo cuenta a quien lleva ${MIN_MUESTRA}' o más.</div>
+      <div class="nota">Toca un jugador para ver su ficha.</div>
     </div>`;
 }
 
@@ -441,7 +497,7 @@ function abrirPartido(idx, orden) {
         ${tarj.length ? `<div style="font-size:12px; color:var(--gris); margin-top:10px;">${tarj.map(t => `${t.tipo === 'TARJETA_RO' ? '🟥' : '🟨'} ${t.minuto}'`).join(' · ')}</div>` : ''}
       </div>
       <div class="card" style="padding:10px 8px;">
-        <div class="card-t" style="padding:0 4px;"><span>👥 Rendimiento de cada jugador</span></div>
+        <div class="card-t" style="padding:0 4px;"><span>👥 Rendimiento de cada jugador ${info('impacto')}</span></div>
         <div class="tabla-wrap"><table class="tb">
           <thead><tr><th data-orden="nombre">Jugador</th>${COLS.map(c => `<th class="${o === c.k ? 'on' : ''}" data-orden="${c.k}">${c.t}${o === c.k ? (desc ? '▾' : '▴') : ''}</th>`).join('')}</tr></thead>
           <tbody>
@@ -456,7 +512,7 @@ function abrirPartido(idx, orden) {
             <tr class="tot"><td>Equipo</td>${COLS.map(c => `<td>${['goles','asistencias','recuperaciones','perdidas','tiros'].includes(c.k) ? tot(c.k) : ''}</td>`).join('')}</tr>
           </tbody>
         </table></div>
-        <div class="nota" style="padding:0 4px;">✅ recuperaciones · ❌ pérdidas · 🎯 tiros · +/- goles a favor menos en contra con él en el campo · Imp impacto en el partido. Toca una columna para ordenar y un jugador para ver su detalle.</div>
+        <div class="nota" style="padding:0 4px;">✅ recuperaciones · ❌ pérdidas · 🎯 tiros · Imp impacto. Toca una columna para ordenar o un jugador para ver su detalle.</div>
       </div>
       ${inf ? `<div class="card"><details class="ia"><summary>🤖 Informe del partido (IA) ›</summary><div class="txt">${esc(inf.texto)}</div></details></div>` : ''}
     </div>`;
@@ -562,7 +618,7 @@ function htmlRankingJugadores() {
 
   return `
     <div class="card">
-      <div class="card-t"><span>📊 Ranking</span></div>
+      <div class="card-t"><span>📊 Ranking ${info('media')}</span></div>
       <div class="segs">${rangos.map(([k, t]) => `<button class="seg${estado.rRango === k ? ' on' : ''}" data-rango="${k}">${t}</button>`).join('')}</div>
       <select class="sel" id="selCrit" aria-label="Ordenar por">${Object.entries(CRITERIOS).map(([k, x]) => `<option value="${k}"${k === estado.rCrit ? ' selected' : ''}>${x.t}</option>`).join('')}</select>
       ${ok.length ? ok.map((x, i) => `<div class="fila toque" data-jug="${esc(x.nombre)}">
@@ -573,11 +629,11 @@ function htmlRankingJugadores() {
         : `<div class="vacio">Nadie llega aún a ${MIN_MUESTRA}' en este periodo.</div>`}
       ${obs.length ? bloqueObs('EN OBSERVACIÓN', `Menos de ${MIN_MUESTRA}': su media aún no es fiable`,
           obs.map(x => `<div class="fila toque" data-jug="${esc(x.nombre)}">${circulo(x.nombre)}<div class="nom">${esc(x.nombre)}</div><div class="sub" style="margin:0;">${x.min}'</div></div>`).join('')) : ''}
-      <div class="nota">${esMedia ? 'Impacto medio = impacto por minuto llevado a la duración de un partido, para comparar igual al que juega mucho y al que juega poco. ' : ''}${estado.rRango === 'todos' ? '📈📉 forma en los últimos partidos. ' : ''}Toca un jugador para ver su ficha.</div>
+      <div class="nota">${estado.rRango === 'todos' ? '📈📉 forma reciente · ' : ''}Toca un jugador para ver su ficha.</div>
     </div>
 
     <div class="card">
-      <div class="card-t"><span>⏱ Reparto de minutos</span><span>media ${mediaIdeal}'</span></div>
+      <div class="card-t"><span>⏱ Reparto de minutos ${info('minutos')}</span><span>media ${mediaIdeal}'</span></div>
       ${porMin.map(x => { const d = x.min - mediaIdeal; return `<div class="toque" data-jug="${esc(x.nombre)}" style="margin-bottom:9px; cursor:pointer;">
         <div style="display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:4px;"><b style="color:var(--tiza);">${esc(x.nombre)}</b>
           <span style="color:var(--gris);"><b style="color:var(--tiza);">${x.min}'</b> <span class="${d >= 0 ? 'pos-v' : 'neg-v'}">(${signo(d)})</span></span></div>
@@ -588,7 +644,7 @@ function htmlRankingJugadores() {
     </div>
 
     <div class="card">
-      <div class="card-t"><span>⚽ Goleadores y asistentes</span>${golEq ? `<span>equipo: gol cada ${Math.round(minEq / golEq)}'</span>` : ''}</div>
+      <div class="card-t"><span>⚽ Goleadores y asistentes ${info('goleadores')}</span>${golEq ? `<span>equipo: gol cada ${Math.round(minEq / golEq)}'</span>` : ''}</div>
       ${ga.length ? `<div class="tabla-wrap"><table class="tb" style="min-width:0;">
         <thead><tr><th>Jugador</th><th>⚽</th><th>👟</th><th>G+A</th><th>Min/gol</th></tr></thead>
         <tbody>${ga.map(x => `<tr class="j" data-jug="${esc(x.nombre)}"><td class="n">${esc(x.nombre)}</td><td class="${x.goles ? '' : 'cero-v'}">${x.goles}</td><td class="${x.asist ? '' : 'cero-v'}">${x.asist}</td>
@@ -599,15 +655,15 @@ function htmlRankingJugadores() {
           <div class="val" style="font-size:15px;">gol cada ${x.mpg}'</div></div>`).join('')}` : ''}
     </div>
 
-    ${posImp.length ? `<div class="card"><div class="card-t"><span>📍 Posición de mayor impacto</span><span>temporada</span></div>
+    ${posImp.length ? `<div class="card"><div class="card-t"><span>📍 Posición de mayor impacto ${info('posicion')}</span><span>temporada</span></div>
       ${posImp.map(x => `<div class="toque" data-jug="${esc(x.nombre)}" style="margin-bottom:10px; cursor:pointer;">
         <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:4px;"><b style="font-size:12.5px; color:var(--tiza);">${esc(x.nombre)}</b>
           <span style="display:flex; align-items:center; gap:6px;"><span style="background:${colorPos(x.id)}; color:#0d0f0f; font-size:10px; font-weight:800; padding:2px 7px; border-radius:5px;">${esc(nombrePos(x.id))}</span>
           <b class="${colV(x.val)}" style="font-size:13px;">${signo(x.val, 1)}</b></span></div>
         <div class="barra"><i style="width:${x.pct}%; background:${colorPos(x.id)};"></i></div></div>`).join('')}
-      <div class="nota">La posición donde cada jugador concentra más impacto, y qué parte de su impacto total sale de ahí.</div></div>` : ''}
+      </div>` : ''}
 
-    ${porteros.length ? `<div class="card"><div class="card-t"><span>🧤 Porteros</span><span>goles encajados por partido</span></div>
+    ${porteros.length ? `<div class="card"><div class="card-t"><span>🧤 Porteros ${info('porteros')}</span><span>goles encajados por partido</span></div>
       ${(() => { const r = rachasPorteria(); return `<div class="grid3" style="grid-template-columns:1fr 1fr; margin-bottom:6px;">
         <div class="box"><div class="v" style="color:var(--verde);">${r.actual}'</div><div class="l">Racha actual sin encajar</div></div>
         <div class="box"><div class="v">${r.max}'</div><div class="l">Mejor racha de la temporada</div></div></div>
@@ -641,7 +697,7 @@ function htmlParejas() {
   const max = Math.max(...ok.map(x => Math.abs(x.media)), 0.01);
   const nom = x => `${esc(x.a)} <span style="color:var(--gris2)">+</span> ${esc(x.b)}`;
   return `<div class="card">${sub}
-    <div class="card-t"><span>${def ? '🛡️ Parejas en defensa' : '🤝 Parejas que mejor funcionan'}</span><span>${conDatos} ${conDatos === 1 ? 'partido' : 'partidos'}</span></div>
+    <div class="card-t"><span>${def ? '🛡️ Parejas en defensa' : '🤝 Parejas que mejor funcionan'} ${info('parejas')}</span><span>${conDatos} ${conDatos === 1 ? 'partido' : 'partidos'}</span></div>
     ${ok.length ? ok.slice(0, estado.parTodas ? ok.length : 10).map((x, i) => `<div class="fila"><span class="pos">${i + 1}</span>
         <div class="nom" style="white-space:normal;">${nom(x)}<div class="sub">${x.min}' juntos · ${x.pj} PJ · impacto ${signo(x.imp, 1)}</div>
           <div class="barra" style="margin-top:5px;"><i style="width:${Math.max(3, Math.abs(x.media) / max * 100)}%; ${x.media < 0 ? 'background:var(--rojo);' : ''}"></i></div></div>
@@ -649,7 +705,7 @@ function htmlParejas() {
       : `<div class="vacio">Ninguna pareja llega aún a ${MIN_MUESTRA}' juntos.</div>`}
     ${ok.length > 10 ? `<button class="seg" style="width:100%; margin-top:10px; padding:10px;" data-partodas="1">${estado.parTodas ? 'Ver solo las 10 mejores' : `Ver todas (${ok.length})`}</button>` : ''}
     ${obs.length ? bloqueObs('EN OBSERVACIÓN', `Menos de ${MIN_MUESTRA}' juntos`, obs.slice(0, 12).map(x => `<div class="fila"><div class="nom" style="white-space:normal;">${nom(x)}</div><div class="sub" style="margin:0;">${x.min}'</div></div>`).join('')) : ''}
-    <div class="nota">${def ? 'Solo cuenta el tiempo en que los dos juegan a la vez en posiciones defensivas. ' : ''}El número es el impacto de la pareja por partido jugando juntos: goles a favor menos en contra mientras coinciden, llevado a la duración de un partido.</div>
+    <div class="nota">Impacto por partido jugando juntos · mínimo ${MIN_MUESTRA}' juntos.</div>
   </div>`;
 }
 
@@ -670,7 +726,7 @@ function htmlAsistencia() {
   const filas = Object.entries(st).map(([n, s]) => ({ n, ...s, tot: s.si + s.no, pct: Math.round(s.si / Math.max(1, s.si + s.no) * 100) }))
     .sort((a, b) => b.pct - a.pct || b.si - a.si);
   const maxR = Math.max(...filas.map(f => f.racha), 0);
-  return `<div class="card"><div class="card-t"><span>📋 Asistencia a partidos</span><span>${plural(ses.length, 'convocatoria', 'convocatorias')}</span></div>
+  return `<div class="card"><div class="card-t"><span>📋 Asistencia a partidos ${info('asistencia')}</span><span>${plural(ses.length, 'convocatoria', 'convocatorias')}</span></div>
     ${filas.map(f => `<div class="fila toque" data-jug="${esc(f.n)}">${circulo(f.n)}
       <div class="nom">${esc(f.n)}<div class="sub">✅ ${f.si} · ❌ ${f.no}${f.racha ? ` · racha ${f.racha === maxR ? '🔥' : ''}${f.racha}` : ''}</div>
         <div class="barra" style="margin-top:5px;"><i style="width:${f.pct}%; background:${f.pct >= 80 ? 'var(--verde)' : f.pct >= 60 ? 'var(--ambar)' : 'var(--rojo)'};"></i></div></div>
@@ -773,9 +829,9 @@ function pintarPanel() {
   if (!ps.length) { el.innerHTML = `<div class="card vacio"><span class="ic">📈</span>El panel aparecerá cuando haya partidos grabados.</div>`; return; }
   el.innerHTML = `
     <div class="card"><div class="card-t"><span>⚽ Goles por partido</span></div>${graficaGoles(ps)}</div>
-    <div class="card"><div class="card-t"><span>🔄 Balance de balón del equipo</span></div>${graficaBalance(ps)}</div>
-    <div class="card"><div class="card-t"><span>⏱ Goles por tramos de 5 minutos</span></div>${htmlTramos(ps)}</div>
-    <div class="card"><div class="card-t"><span>🎯 Según el nivel del rival</span></div>${htmlNivelRival(ps)}</div>
+    <div class="card"><div class="card-t"><span>🔄 Balance de balón del equipo ${info('balance')}</span></div>${graficaBalance(ps)}</div>
+    <div class="card"><div class="card-t"><span>⏱ Goles por tramos de 5 minutos ${info('tramos')}</span></div>${htmlTramos(ps)}</div>
+    <div class="card"><div class="card-t"><span>🎯 Según el nivel del rival ${info('rival')}</span></div>${htmlNivelRival(ps)}</div>
     <div class="card"><div class="card-t"><span>🟨 Tarjetas</span></div>${htmlTarjetas(ps)}</div>`;
 }
 
@@ -836,11 +892,11 @@ function abrirJugador(nombre) {
         ${(d.tarjetasAm || d.tarjetasRo) ? `<div class="fila"><div class="nom">Tarjetas</div><div class="val" style="color:var(--tiza)">🟨 ${d.tarjetasAm || 0} · 🟥 ${d.tarjetasRo || 0}</div></div>` : ''}
         ${(d.minutosPorteria || 0) > 0 ? `<div class="fila"><div class="nom">🧤 En portería<div class="sub">${d.partidosPorteria || 0} PJ · ${d.minutosPorteria}' · ${d.paradasPorteria || 0} paradas · ${d.golesEncajadosPorteria || 0} encajados</div></div></div>` : ''}
       </div>
-      <div class="card"><div class="card-t"><span>📈 Evolución</span></div>
+      <div class="card"><div class="card-t"><span>📈 Evolución ${info('forma')}</span></div>
         <select class="sel" id="selEvo" aria-label="Dato de la evolución">${Object.entries(EVO_MET).map(([k, [t]]) => `<option value="${k}"${k === estado.evMet ? ' selected' : ''}>${t}</option>`).join('')}</select>
         <div id="evoGraf">${graficaEvolucion(nombre, estado.evMet)}</div>
       </div>
-      ${socios.length ? `<div class="card"><div class="card-t"><span>🤝 Con quién funciona mejor</span></div>
+      ${socios.length ? `<div class="card"><div class="card-t"><span>🤝 Con quién funciona mejor ${info('parejas')}</span></div>
         ${socios.map(p => { const otro = p.a === nombre ? p.b : p.a; return `<div class="fila toque" data-jug="${esc(otro)}">${circulo(otro)}<div class="nom">${esc(otro)}<div class="sub">${p.min}' juntos</div></div><div class="val ${colV(p.media)}">${signo(p.media, 2)}</div></div>`; }).join('')}</div>` : ''}
       ${pos.length ? `<div class="card"><div class="card-t"><span>🧭 Dónde juega</span></div>
         ${pos.map(([id, s]) => { const pc = Math.round(s / totS * 100);
@@ -870,7 +926,7 @@ function pintarMvp() {
   const bal = rankingBloque(actual).filter(x => x.rec || x.per).sort((a, b) => (b.rec - b.per) - (a.rec - a.per)).slice(0, 3);
   const med = ['🥇', '🥈', '🥉'];
   const topBal = bal.length ? `<div class="card" style="background:linear-gradient(135deg,rgba(0,137,123,.35),rgba(0,105,92,.2)); border-color:rgba(0,217,196,.3);">
-    <div class="card-t" style="color:var(--turq);"><span>🎯 Top 3 balance de balón</span><span>${enCursoAct ? 'bloque en curso' : 'último bloque'}</span></div>
+    <div class="card-t" style="color:var(--turq);"><span>🎯 Top 3 balance de balón ${info('balance')}</span><span>${enCursoAct ? 'bloque en curso' : 'último bloque'}</span></div>
     ${bal.map((x, i) => `<div class="fila toque" data-jug="${esc(x.nombre)}"><span style="font-size:18px; width:22px; text-align:center;">${med[i]}</span><div class="nom">${esc(x.nombre)}<div class="sub">✅ ${x.rec} · ❌ ${x.per}</div></div><div class="val">${signo(x.rec - x.per)}</div></div>`).join('')}
   </div>` : '';
   const bloque = (b, n) => {
@@ -888,7 +944,7 @@ function pintarMvp() {
       <div class="sub" style="margin-top:8px;">${b.map(p => `vs ${esc(p.rival)} ${p.golesH}–${p.golesR}`).join(' · ')}</div>
     </div>`;
   };
-  el.innerHTML = `<div class="aviso" style="color:var(--texto); background:rgba(0,217,196,.06); border-color:rgba(0,217,196,.25);">🌟 Cada 4 partidos de liga se elige un MVP: el jugador con mejor impacto medio (med) en ese bloque. En azul, su impacto total (imp).</div>`
+  el.innerHTML = `<div class="aviso" style="color:var(--texto); background:rgba(0,217,196,.06); border-color:rgba(0,217,196,.25);">🌟 Cada 4 partidos de liga se elige un MVP: el jugador con mejor impacto medio (med) en ese bloque. En azul, su impacto total (imp). ${info('mvp')}</div>`
     + topBal + bloques.map((b, i) => ({ b, n: i + 1 })).reverse().map(x => bloque(x.b, x.n)).join('');
 }
 
@@ -920,6 +976,8 @@ document.addEventListener('click', e => {
   const det = t.closest('[data-det]'); if (det && estado.ficha) { abrirDetalle(estado.ficha.idx, det.dataset.det); return; }
   const pa = t.closest('[data-partido]'); if (pa) { abrirPartido(+pa.dataset.partido); return; }
   const ju = t.closest('[data-jug]'); if (ju) { abrirJugador(ju.dataset.jug); return; }
+  const gu = t.closest('[data-guia]'); if (gu) { abrirGuia(gu.dataset.guia); return; }
+  const cg = t.closest('[data-cerrar-guia]'); if (cg) { try { localStorage.setItem('bk_guia_vista', '1'); } catch (e2) {} document.getElementById('avisoGuia').innerHTML = ''; return; }
   const ra = t.closest('[data-rango]'); if (ra) { estado.rRango = ra.dataset.rango; pintarRanking(); return; }
   const rv = t.closest('[data-rvista]'); if (rv) { estado.rVista = rv.dataset.rvista; pintarRanking(); return; }
   const pt = t.closest('[data-partodas]'); if (pt) { estado.parTodas = !estado.parTodas; pintarRanking(); return; }
@@ -1015,7 +1073,7 @@ function pintarDirecto() {
       <div style="font-size:11px; color:var(--gris); margin-top:6px;">⛳ Córners ${DIR.corners ? DIR.corners.f : 0} – ${DIR.corners ? DIR.corners.c : 0} · 🧤 Sin encajar: <b id="dirRacha" style="color:var(--tiza);">${rachaDirecto()}'</b></div>
     </div>
     <div class="card">
-      <div class="card-t"><span>⏱ Lo que va pasando</span></div>
+      <div class="card-t"><span>⏱ Lo que va pasando ${info('directo')}</span></div>
       ${evs.length ? evs.map(e => `<div class="ev${e.tipo === 'GOL_CONTRA' ? ' rival' : ''}"><b>${e.min}'</b><span>${evIcono(e)} ${evTexto(e)}</span></div>`).join('')
         : '<div style="font-size:12.5px; color:var(--gris);">Aún no ha pasado nada destacado.</div>'}
     </div>
@@ -1029,7 +1087,7 @@ function pintarDirecto() {
       ${banquillo.length ? `<div style="font-size:11.5px; color:var(--gris); margin-top:10px; line-height:1.6;">🪑 Banquillo: ${banquillo.map(j => esc(j.n) + (j.min ? ` <span style="color:var(--gris2)">(${j.min}')</span>` : '')).join(' · ')}</div>` : ''}
     </div>
     <div class="card" style="padding:10px 8px;">
-      <div class="card-t" style="padding:0 4px;"><span>👥 Jugadores en este partido</span></div>
+      <div class="card-t" style="padding:0 4px;"><span>👥 Jugadores en este partido ${info('directo')}</span></div>
       <div class="tabla-wrap"><table class="tb">
         <thead><tr><th>Jugador</th><th>Min</th><th>⚽</th><th>👟</th><th>✅</th><th>❌</th><th>🎯</th><th>🧤</th></tr></thead>
         <tbody>${tabla.map(j => `<tr><td class="n">${j.enCampo ? '' : '<span style="color:var(--gris2)">🪑 </span>'}${esc(j.n)}${tarjetas(j) ? ' ' + tarjetas(j) : ''}</td>
@@ -1095,6 +1153,12 @@ function cargarDatos(obj) {
   cabecera(); pintarTodo();
 }
 window.__cargarDatos = cargarDatos; // para pruebas
+
+/* ---------- Aviso de la guía la primera vez ---------- */
+(() => { let visto = false; try { visto = localStorage.getItem('bk_guia_vista') === '1'; } catch (e) {}
+  if (!visto) document.getElementById('avisoGuia').innerHTML = `<div class="aviso" style="display:flex; align-items:center; gap:10px; color:var(--texto); background:rgba(0,217,196,.07); border-color:rgba(0,217,196,.3);">
+    <span style="flex:1;">👋 ¿Primera vez? Toca <button class="info" data-guia="" style="vertical-align:0;">ⓘ</button> en cualquier apartado para ver cómo se calcula cada número.</span>
+    <button class="cerrar" data-cerrar-guia="1" aria-label="Cerrar aviso" style="width:30px; height:30px; font-size:14px;">✕</button></div>`; })();
 
 /* ---------- Tema claro / oscuro (se recuerda en cada móvil) ---------- */
 function ponerIconoTema() { document.getElementById('btnTema').textContent = document.documentElement.getAttribute('data-tema') === 'oscuro' ? '☀️' : '🌙'; }
