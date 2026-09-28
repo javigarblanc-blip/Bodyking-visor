@@ -320,6 +320,21 @@ function formaJugador(nombre) {
   return dif > 0 ? { ic: '📈', t: 'En alza', c: 'var(--verde)' } : { ic: '📉', t: 'En baja', c: 'var(--rojo)' };
 }
 
+/* Rachas de portería (mismo cálculo que la app): minutos sin encajar según el minuto de los goles en contra.
+   actual: desde el último gol recibido (sigue en el partido siguiente); max: la más larga de la temporada. */
+function rachasPorteria() {
+  let actual = 0, max = 0, sinDatos = false;
+  liga().forEach(p => {
+    const dur = p.duracion || DUR_DEF;
+    const cs = (p.golesMin || []).filter(g => g.t === 'C').map(g => Math.min(dur, Math.max(0, g.min))).sort((a, b) => a - b);
+    if ((p.golesR || 0) > 0 && !cs.length) { actual = 0; sinDatos = true; return; }
+    let prev = 0;
+    cs.forEach(m => { max = Math.max(max, actual + m - prev); actual = 0; prev = m; });
+    actual += dur - prev; max = Math.max(max, actual);
+  });
+  return { actual, max, sinDatos };
+}
+
 /* ---------- RESUMEN ---------- */
 function pintarResumen() {
   const el = document.getElementById('p-resumen');
@@ -593,6 +608,10 @@ function htmlRankingJugadores() {
       <div class="nota">La posición donde cada jugador concentra más impacto, y qué parte de su impacto total sale de ahí.</div></div>` : ''}
 
     ${porteros.length ? `<div class="card"><div class="card-t"><span>🧤 Porteros</span><span>goles encajados por partido</span></div>
+      ${(() => { const r = rachasPorteria(); return `<div class="grid3" style="grid-template-columns:1fr 1fr; margin-bottom:6px;">
+        <div class="box"><div class="v" style="color:var(--verde);">${r.actual}'</div><div class="l">Racha actual sin encajar</div></div>
+        <div class="box"><div class="v">${r.max}'</div><div class="l">Mejor racha de la temporada</div></div></div>
+        <div class="nota" style="margin:0 0 6px;">La racha actual sigue sumando en el próximo partido hasta que nos marquen.${r.sinDatos ? ' Hay partidos sin el minuto de los goles en contra: la racha empieza a contar después.' : ''}</div>`; })()}
       ${porteros.map(x => `<div class="fila toque" data-jug="${esc(x.nombre)}">${circulo(x.nombre)}
         <div class="nom">${esc(x.nombre)}<div class="sub">${x.pj} PJ · ${x.min}' · 🧤 ${x.par} paradas · 🥅 ${x.enc} encajados${x.pct != null ? ` · ${x.pct}% paradas` : ''}</div></div>
         <div class="val" style="color:${x.prom <= 1 ? 'var(--verde)' : 'var(--ambar)'}">${num(x.prom, 2)}</div></div>`).join('')}
@@ -930,6 +949,13 @@ function dirEstado() {
   if (ult && ult.tipo === 'SEGUNDA_PARTE') return 'DESCANSO';
   return dirSegundos() > 0 ? 'EN PAUSA' : 'A PUNTO DE EMPEZAR';
 }
+// Minutos sin encajar en directo: si aún no nos han marcado, suma lo que venía de partidos anteriores
+function rachaDirecto() {
+  const minNow = Math.floor(dirSegundos() / 60);
+  const cs = (DIR.eventos || []).filter(e => e.tipo === 'GOL_CONTRA').map(e => e.min);
+  if (cs.length) return Math.max(0, minNow - Math.max(...cs));
+  return (D ? rachasPorteria().actual : 0) + minNow;
+}
 const reloj = s => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 
 function coordsCampo(sis) {
@@ -986,7 +1012,7 @@ function pintarDirecto() {
         <div class="marc-eq" style="text-align:left;">${esc(DIR.rival || 'Rival')}</div>
       </div>
       <div class="marc-reloj" id="dirReloj">${reloj(dirSegundos())}</div>
-      <div style="font-size:11px; color:var(--gris); margin-top:6px;">⛳ Córners ${DIR.corners ? DIR.corners.f : 0} – ${DIR.corners ? DIR.corners.c : 0}</div>
+      <div style="font-size:11px; color:var(--gris); margin-top:6px;">⛳ Córners ${DIR.corners ? DIR.corners.f : 0} – ${DIR.corners ? DIR.corners.c : 0} · 🧤 Sin encajar: <b id="dirRacha" style="color:var(--tiza);">${rachaDirecto()}'</b></div>
     </div>
     <div class="card">
       <div class="card-t"><span>⏱ Lo que va pasando</span></div>
@@ -998,7 +1024,7 @@ function pintarDirecto() {
       <div class="campo"><div class="lin"></div><div class="circ"></div><div class="area" style="top:0;"></div><div class="area" style="bottom:0;"></div>
         ${enCampo.map(j => { const c = coords[j.pos] || { x: 50, y: 50 };
           const extra = (j.g ? '⚽'.repeat(Math.min(j.g, 3)) : '') + tarjetas(j);
-          return `<div class="jf${j.pos === 0 ? ' gk' : ''}" style="left:${c.x}%; top:${100 - c.y}%;"><div class="c">${j.d != null ? esc(j.d) : '·'}</div><div class="n">${esc(j.n)}</div>${extra ? `<div class="x">${extra}</div>` : ''}</div>`; }).join('')}
+          return `<div class="jf${j.pos === 0 ? ' gk' : ''}" style="left:${c.x}%; top:${100 - c.y}%;"><div class="c">${j.d != null ? esc(j.d) : esc(String(j.n || '?').charAt(0))}</div><div class="n">${esc(j.n)}</div>${extra ? `<div class="x">${extra}</div>` : ''}</div>`; }).join('')}
       </div>
       ${banquillo.length ? `<div style="font-size:11.5px; color:var(--gris); margin-top:10px; line-height:1.6;">🪑 Banquillo: ${banquillo.map(j => esc(j.n) + (j.min ? ` <span style="color:var(--gris2)">(${j.min}')</span>` : '')).join(' · ')}</div>` : ''}
     </div>
@@ -1046,7 +1072,8 @@ function cargarDirecto(obj) {
   pintarDirecto();
 }
 window.__cargarDirecto = cargarDirecto; // para pruebas
-setInterval(() => { const r = document.getElementById('dirReloj'); if (r && DIR) r.textContent = reloj(dirSegundos()); }, 1000);
+setInterval(() => { const r = document.getElementById('dirReloj'); if (r && DIR) r.textContent = reloj(dirSegundos());
+  const k = document.getElementById('dirRacha'); if (k && DIR) k.textContent = rachaDirecto() + "'"; }, 1000);
 document.getElementById('golAviso').addEventListener('click', e => e.currentTarget.classList.remove('on'));
 
 /* ---------- carga de datos desde Firebase (REST + actualización en directo) ---------- */
