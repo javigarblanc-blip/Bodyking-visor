@@ -192,7 +192,7 @@
 
   .leyenda { display:flex; gap:12px; flex-wrap:wrap; font-size:11px; color:var(--gris); margin-top:6px; }
   .leyenda i { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; vertical-align:-1px; }
-  .tab { font-size:10.5px; letter-spacing:.2px; }
+  .tab { font-size:9.5px; letter-spacing:0; padding:7px 1px; min-width:0; }
   .tab .ic { font-size:18px; }
 
   .info { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; margin-left:4px; border-radius:50%; border:1px solid var(--turq);
@@ -233,6 +233,7 @@
   <section class="panel" id="p-directo"></section>
   <section class="panel on" id="p-resumen"><div class="vacio"><span class="ic">⏳</span>Cargando…</div></section>
   <section class="panel" id="p-partidos"></section>
+  <section class="panel" id="p-liga"></section>
   <section class="panel" id="p-ranking"></section>
   <section class="panel" id="p-panel"></section>
   <section class="panel" id="p-mvp"></section>
@@ -245,6 +246,7 @@
   <button class="tab vivo" data-tab="directo" id="tabDirecto" style="display:none;"><span class="ic">🔴</span>Directo</button>
   <button class="tab on" data-tab="resumen"><span class="ic">🏠</span>Resumen</button>
   <button class="tab" data-tab="partidos"><span class="ic">📅</span>Partidos</button>
+  <button class="tab" data-tab="liga"><span class="ic">🏆</span>Liga</button>
   <button class="tab" data-tab="ranking"><span class="ic">📊</span>Ranking</button>
   <button class="tab" data-tab="panel"><span class="ic">📈</span>Panel</button>
   <button class="tab" data-tab="mvp"><span class="ic">🌟</span>MVP</button>
@@ -387,6 +389,10 @@ const GUIA = [
     <li><b>De la temporada:</b> en qué minutos marcamos o encajamos, cómo cambia el equipo con o sin un jugador en el campo, rendimiento contra rivales superiores y tendencia de pérdidas.</li>
     <li>Solo cuentan partidos de liga y hace falta muestra mínima (al menos 3–6 partidos y 50' con y sin el jugador, según el caso).</li>
     <li>Las tendencias de temporada no se repiten si ya salieron en uno de los dos partidos anteriores.</li></ul>`],
+  ['liga', '🏆 Liga y simulación', `<p>La clasificación se calcula con todos los resultados de la liga. Si hay empate a puntos, manda el enfrentamiento directo; después, la diferencia de goles y los goles a favor.</p>
+    <p><b>Simulación:</b> se juegan 5.000 veces los partidos que faltan. Cada equipo tiene una fuerza de ataque y de defensa según los goles que marca y encaja (con un poco de media de la liga para que un solo partido no lo decida todo).</p>
+    <p class="ej">«Salvarse 80%» significa que en 4.000 de las 5.000 temporadas simuladas acabamos fuera del descenso.</p>
+    <p><b>Partido clave:</b> el partido nuestro que más cambia nuestras opciones según lo ganemos o lo perdamos.</p>`],
   ['records', '🏅 Récords', `<ul><li>Solo cuentan los partidos de liga.</li><li>Si dos igualan un récord, se queda el primero que lo consiguió.</li>
     <li><b>Rachas de jugador:</b> cuentan solo los partidos que juega; si no juega, la racha no se corta.</li>
     <li><b>Mayor remontada:</b> la mayor desventaja que llegamos a tener en un partido que acabamos ganando. Necesita el minuto de todos los goles.</li>
@@ -421,7 +427,7 @@ function pintarResumen() {
   const balance = top(x => x.recuperaciones - x.perdidas, x => x.recuperaciones + x.perdidas > 0);
   const lider = (ic, t, x, v) => x ? `<div class="fila toque" data-jug="${esc(x.nombre)}">${circulo(x.nombre)}<div class="nom">${esc(x.nombre)}<div class="sub">${ic} ${t}</div></div><div class="val">${v}</div><span class="flecha">›</span></div>` : '';
 
-  el.innerHTML = `
+  el.innerHTML = (D.liga && Array.isArray(D.liga.equipos) ? htmlProximoLiga(D.liga) : '') + `
     <div class="card">
       <div class="card-t"><span>🏁 Último partido</span><span>${esc(ult.fecha || '')}</span></div>
       <div class="fila partido" data-partido="${idxPartido(ult)}" style="padding-top:2px;">
@@ -1304,10 +1310,392 @@ function pintarRecords() {
     + `<div class="nota" style="margin:0 4px 10px;">Toca un récord para ver ese partido. Solo liga; si hay empate, se queda el primero que lo consiguió.</div>`;
 }
 
+/* ── LIGA: CLASIFICACIÓN Y SIMULADOR (mismo cálculo en app y visor) ──
+   Liga a una vuelta: los partidos que faltan son los cruces que aún no tienen resultado.
+   Desempate: puntos → enfrentamiento directo entre empatados (puntos y goles) →
+   diferencia de goles general → goles a favor. */
+const LIGA_DEF = {
+    nombre: 'F7 · 4ª División Apertura · Grupo II',
+    equipos: ['BODY KING', 'CDV', 'NEWCAMEL FC', 'DAVID GARRIDO EVENTOS', 'SPORTING 593', 'J. DE MUNICH',
+        'REVENTAOS CF', 'EL RINCÓN DE LA VENTA FC', 'APOLO II', 'RACING LAS VEGAS', 'ORFEO FC'],
+    nuestro: 'BODY KING',
+    descienden: 5,
+    resultados: [
+        { j: 1, l: 'DAVID GARRIDO EVENTOS', v: 'REVENTAOS CF', gl: 5, gv: 4 },
+        { j: 1, l: 'CDV', v: 'RACING LAS VEGAS', gl: 6, gv: 2 },
+        { j: 1, l: 'APOLO II', v: 'NEWCAMEL FC', gl: 3, gv: 6 },
+        { j: 1, l: 'BODY KING', v: 'ORFEO FC', gl: 8, gv: 1 },
+        { j: 1, l: 'EL RINCÓN DE LA VENTA FC', v: 'SPORTING 593', gl: 1, gv: 2 }
+    ]
+};
+
+function ligaNormNombre(s) {
+    return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+        .replace(/\b(fc|cf|cd|ud|club|c\.f\.|f\.c\.)\b/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim();
+}
+// Busca el equipo de la liga que corresponde a un nombre escrito a mano ("Orfeo" → "ORFEO FC")
+function ligaBuscarEquipo(L, nombre) {
+    const n = ligaNormNombre(nombre);
+    if (!n) return null;
+    const exactos = L.equipos.filter(e => ligaNormNombre(e) === n);
+    if (exactos.length === 1) return exactos[0];
+    const parecidos = L.equipos.filter(e => { const x = ligaNormNombre(e); return x.length >= 3 && n.length >= 3 && (x.includes(n) || n.includes(x)); });
+    return parecidos.length === 1 ? parecidos[0] : null;
+}
+const ligaClavePar = (a, b) => [a, b].sort().join('\u0001');
+const ligaPtsDe = (gf, gc) => gf > gc ? 3 : gf === gc ? 1 : 0;
+const ligaZonaDescenso = (L, pos) => pos > L.equipos.length - (L.descienden || 0);
+
+function ligaOrdenar(filas, res) {
+    filas.sort((a, b) => b.pts - a.pts);
+    const out = [];
+    for (let i = 0; i < filas.length;) {
+        let k = i; while (k < filas.length && filas[k].pts === filas[i].pts) k++;
+        const grupo = filas.slice(i, k);
+        if (grupo.length > 1) {
+            const set = new Set(grupo.map(x => x.eq)), mini = {};
+            grupo.forEach(x => { mini[x.eq] = { pts: 0, dg: 0 }; });
+            res.forEach(r => {
+                if (!set.has(r.l) || !set.has(r.v)) return;
+                mini[r.l].pts += ligaPtsDe(r.gl, r.gv); mini[r.v].pts += ligaPtsDe(r.gv, r.gl);
+                mini[r.l].dg += r.gl - r.gv; mini[r.v].dg += r.gv - r.gl;
+            });
+            grupo.sort((a, b) => mini[b.eq].pts - mini[a.eq].pts || mini[b.eq].dg - mini[a.eq].dg
+                || (b.gf - b.gc) - (a.gf - a.gc) || b.gf - a.gf || a.eq.localeCompare(b.eq));
+        }
+        out.push(...grupo); i = k;
+    }
+    return out;
+}
+
+function ligaClasificacion(L, hastaJ) {
+    const t = {};
+    L.equipos.forEach(e => { t[e] = { eq: e, pj: 0, g: 0, e: 0, p: 0, gf: 0, gc: 0, pts: 0 }; });
+    const res = (L.resultados || []).filter(r => t[r.l] && t[r.v] && r.l !== r.v && (!hastaJ || r.j <= hastaJ));
+    res.forEach(r => {
+        const a = t[r.l], b = t[r.v];
+        a.pj++; b.pj++; a.gf += r.gl; a.gc += r.gv; b.gf += r.gv; b.gc += r.gl;
+        if (r.gl > r.gv) { a.g++; b.p++; a.pts += 3; } else if (r.gl < r.gv) { b.g++; a.p++; b.pts += 3; } else { a.e++; b.e++; a.pts++; b.pts++; }
+    });
+    return ligaOrdenar(Object.values(t), res).map((x, i) => ({ ...x, pos: i + 1, dg: x.gf - x.gc }));
+}
+
+function ligaPendientes(L) {
+    const jugados = new Set((L.resultados || []).map(r => ligaClavePar(r.l, r.v)));
+    const out = [];
+    for (let i = 0; i < L.equipos.length; i++) for (let k = i + 1; k < L.equipos.length; k++) {
+        const a = L.equipos[i], b = L.equipos[k];
+        if (!jugados.has(ligaClavePar(a, b))) out.push({ l: a, v: b });
+    }
+    return out;
+}
+
+function ligaJornadaActual(L) {
+    const porJ = {};
+    (L.resultados || []).forEach(r => { porJ[r.j] = (porJ[r.j] || 0) + 1; });
+    const js = Object.keys(porJ).map(Number);
+    return js.length ? Math.max(...js) : 0;
+}
+
+// Simulación de lo que falta: cada equipo tiene una fuerza de ataque y de defensa según
+// sus goles (con un poco de "media de la liga" para que 1 partido no lo decida todo).
+// La semilla sale de los datos: app y visor muestran exactamente los mismos porcentajes.
+function ligaSimular(L, N) {
+    N = N || 5000;
+    const eqs = L.equipos, n = eqs.length;
+    const res = (L.resultados || []).filter(r => eqs.includes(r.l) && eqs.includes(r.v));
+    const pend = ligaPendientes(L);
+    const base = {}; eqs.forEach(e => { base[e] = { pj: 0, gf: 0, gc: 0 }; });
+    res.forEach(r => { base[r.l].pj++; base[r.v].pj++; base[r.l].gf += r.gl; base[r.l].gc += r.gv; base[r.v].gf += r.gv; base[r.v].gc += r.gl; });
+    const totP = res.length;
+    const mu = totP ? res.reduce((s, r) => s + r.gl + r.gv, 0) / (2 * totP) : 3;
+    const K = 4; // peso de la media de la liga: al principio manda más, luego pesan los resultados
+    const att = {}, def = {};
+    eqs.forEach(e => { const b = base[e]; att[e] = (b.gf + K * mu) / (b.pj + K) / mu; def[e] = (b.gc + K * mu) / (b.pj + K) / mu; });
+    let h = 2166136261; const txt = JSON.stringify([eqs, res, N]);
+    for (let i = 0; i < txt.length; i++) { h ^= txt.charCodeAt(i); h = Math.imul(h, 16777619); }
+    let s = h >>> 0;
+    const rnd = () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    // Poisson por tabla acumulada: un solo aleatorio por marcador
+    const tablaPoisson = lam => { const c = []; let p = Math.exp(-lam), acc = p; c.push(acc); for (let k = 1; k < 25; k++) { p *= lam / k; acc += p; c.push(acc); } return c; };
+    const poisson = c => { const u = rnd(); let k = 0; while (k < c.length - 1 && u > c[k]) k++; return k; };
+
+    // Versión rápida con índices (mismo criterio de desempate que ligaOrdenar)
+    const idx = {}; eqs.forEach((e, i) => { idx[e] = i; });
+    const nomOrden = eqs.map((e, i) => i).sort((a, b) => eqs[a].localeCompare(eqs[b]));
+    const rango = new Array(n); nomOrden.forEach((i, r) => { rango[i] = r; });
+    const R0 = res.map(r => [idx[r.l], idx[r.v], r.gl, r.gv]);
+    const P = pend.map(m => [idx[m.l], idx[m.v], tablaPoisson(mu * att[m.l] * def[m.v]), tablaPoisson(mu * att[m.v] * def[m.l])]);
+    const total = R0.length + P.length;
+    const RL = new Int32Array(total), RV = new Int32Array(total), GL = new Int32Array(total), GV = new Int32Array(total);
+    R0.forEach((r, k) => { RL[k] = r[0]; RV[k] = r[1]; GL[k] = r[2]; GV[k] = r[3]; });
+    P.forEach((m, k) => { RL[R0.length + k] = m[0]; RV[R0.length + k] = m[1]; });
+    const pts = new Int32Array(n), gf = new Int32Array(n), gc = new Int32Array(n);
+    const mPts = new Int32Array(n), mDg = new Int32Array(n), enGrupo = new Uint8Array(n);
+    const orden = new Array(n);
+    const cmpBase = (a, b) => pts[b] - pts[a];
+    const cmpDesempate = (a, b) => mPts[b] - mPts[a] || mDg[b] - mDg[a] || (gf[b] - gc[b]) - (gf[a] - gc[a]) || gf[b] - gf[a] || rango[a] - rango[b];
+
+    const cuenta = {}; eqs.forEach(e => { cuenta[e] = new Array(n).fill(0); });
+    const nuestro = L.nuestro, iN = idx[nuestro] === undefined ? -1 : idx[nuestro];
+    const nuestros = [];
+    P.forEach((m, k) => { if (m[0] === iN || m[1] === iN) nuestros.push(k); });
+    const clave = nuestros.map(() => ({ V: [0, 0, 0], E: [0, 0, 0], D: [0, 0, 0] })); // [veces, salvado, 1º]
+    const limiteSalva = n - (L.descienden || 0);
+    for (let it = 0; it < N; it++) {
+        for (let k = 0; k < P.length; k++) { GL[R0.length + k] = poisson(P[k][2]); GV[R0.length + k] = poisson(P[k][3]); }
+        pts.fill(0); gf.fill(0); gc.fill(0);
+        for (let k = 0; k < total; k++) {
+            const l = RL[k], v = RV[k], a = GL[k], b = GV[k];
+            gf[l] += a; gc[l] += b; gf[v] += b; gc[v] += a;
+            if (a > b) pts[l] += 3; else if (a < b) pts[v] += 3; else { pts[l]++; pts[v]++; }
+        }
+        for (let i = 0; i < n; i++) orden[i] = i;
+        orden.sort(cmpBase);
+        for (let i = 0; i < n;) {
+            let k = i; while (k < n && pts[orden[k]] === pts[orden[i]]) k++;
+            if (k - i > 1) {
+                for (let q = i; q < k; q++) { enGrupo[orden[q]] = 1; mPts[orden[q]] = 0; mDg[orden[q]] = 0; }
+                for (let q = 0; q < total; q++) {
+                    const l = RL[q], v = RV[q];
+                    if (!enGrupo[l] || !enGrupo[v]) continue;
+                    const a = GL[q], b = GV[q];
+                    mDg[l] += a - b; mDg[v] += b - a;
+                    if (a > b) mPts[l] += 3; else if (a < b) mPts[v] += 3; else { mPts[l]++; mPts[v]++; }
+                }
+                const g = orden.slice(i, k).sort(cmpDesempate);
+                for (let q = i; q < k; q++) { orden[q] = g[q - i]; enGrupo[orden[q]] = 0; }
+            }
+            i = k;
+        }
+        let posN = -1;
+        for (let i = 0; i < n; i++) { cuenta[eqs[orden[i]]][i]++; if (orden[i] === iN) posN = i + 1; }
+        nuestros.forEach((k, q) => {
+            const m = P[k], r = R0.length + k;
+            const gN = m[0] === iN ? GL[r] : GV[r], gR = m[0] === iN ? GV[r] : GL[r];
+            const c = clave[q][gN > gR ? 'V' : gN === gR ? 'E' : 'D'];
+            c[0]++; if (posN > 0 && posN <= limiteSalva) c[1]++; if (posN === 1) c[2]++;
+        });
+    }
+    const probs = {};
+    eqs.forEach(e => {
+        const c = cuenta[e].map(x => x / N);
+        probs[e] = {
+            porPuesto: c,
+            medio: c.reduce((s, p, i) => s + p * (i + 1), 0),
+            campeon: c[0],
+            salva: c.slice(0, limiteSalva).reduce((s, p) => s + p, 0),
+            desc: c.slice(limiteSalva).reduce((s, p) => s + p, 0)
+        };
+    });
+    // Partido clave: el que más cambia nuestras opciones según ganemos o perdamos
+    let partidoClave = null;
+    if (nuestro && probs[nuestro]) {
+        const pN = probs[nuestro];
+        const usarSalva = pN.desc > 0.03 && pN.salva > 0.03;
+        const idx = usarSalva ? 1 : 2;
+        nuestros.forEach((kP, k) => {
+            const m = pend[kP];
+            const c = clave[k], f = x => x[0] ? x[idx] / x[0] : null;
+            const pv = f(c.V), pd = f(c.D);
+            if (pv === null || pd === null) return;
+            const dif = pv - pd;
+            if (!partidoClave || dif > partidoClave.dif) partidoClave = { rival: m.l === nuestro ? m.v : m.l, dif, siGana: pv, siEmpata: f(c.E), siPierde: pd, metrica: usarSalva ? 'salva' : 'campeon' };
+        });
+    }
+    return { probs, pendientes: pend.length, partidoClave, N, limiteSalva };
+}
+
+// Posición de nuestro equipo jornada a jornada
+function ligaEvolucion(L) {
+    const maxJ = ligaJornadaActual(L), out = [];
+    for (let j = 1; j <= maxJ; j++) {
+        const c = ligaClasificacion(L, j), f = c.find(x => x.eq === L.nuestro);
+        out.push({ j, pos: f ? f.pos : null });
+    }
+    return out;
+}
+
+// Calendario oficial (Futormes). Formato: jornada|fecha|hora|campo|local|visitante
+const LIGA_COD = { DG: 'DAVID GARRIDO EVENTOS', RV: 'REVENTAOS CF', CDV: 'CDV', RLV: 'RACING LAS VEGAS', AP: 'APOLO II', NC: 'NEWCAMEL FC',
+    BK: 'BODY KING', OR: 'ORFEO FC', RI: 'EL RINCÓN DE LA VENTA FC', SP: 'SPORTING 593', JM: 'J. DE MUNICH' };
+const LIGA_CAL_DEF = `
+1|2026-09-26|19:00|AB1|DG|RV
+1|2026-09-27|16:00|AB2|CDV|RLV
+1|2026-09-27|17:00|AB1|AP|NC
+1|2026-09-27|17:00|AB2|BK|OR
+1|2026-09-27|18:00|AA2|RI|SP
+2|2026-10-03|20:00|BRA|NC|JM
+2|2026-10-04|16:00|AA2|RLV|BK
+2|2026-10-04|17:00|AA1|OR|AP
+2|2026-10-04|18:00|AC2|RV|CDV
+2|2026-10-04|19:00|AC1|SP|DG
+3|2026-10-17|17:00|BRA|AP|RLV
+3|2026-10-17|19:00|AC2|NC|OR
+3|2026-10-18|13:00|AC2|BK|RV
+3|2026-10-18|17:00|AA1|CDV|SP
+3|2026-10-18|18:00|AA1|JM|RI
+4|2026-10-25|13:00|AC2|SP|BK
+4|2026-10-25|17:00|AA1|RI|DG
+4|2026-10-25|17:00|AA2|OR|JM
+4|2026-10-25|17:00|AB2|RLV|NC
+4|2026-10-25|18:00|AA2|RV|AP
+5|2026-11-07|16:00|AC2|NC|RV
+5|2026-11-07|17:00|AC1|AP|SP
+5|2026-11-08|16:00|BRA|OR|RLV
+5|2026-11-08|17:00|BRA|CDV|RI
+5|2026-11-08|18:00|BRA|JM|DG
+6|2026-11-15|12:00|AC2|RV|OR
+6|2026-11-15|16:00|AC2|RLV|JM
+6|2026-11-15|17:00|AC1|RI|BK
+6|2026-11-15|17:00|AC2|SP|NC
+6|2026-11-15|18:00|AC1|DG|CDV
+7|2026-11-21|16:00|AC2|AP|RI
+7|2026-11-22|10:00|BRA|BK|DG
+7|2026-11-22|16:00|AA1|RLV|RV
+7|2026-11-22|18:00|AC2|JM|CDV
+7|2026-11-22|19:00|AC2|OR|SP
+8|2026-11-29|11:00|AC2|RV|JM
+8|2026-11-29|13:00|AC2|SP|RLV
+8|2026-11-29|16:00|AA2|RI|NC
+8|2026-11-29|17:00|AA1|DG|AP
+8|2026-11-29|17:00|AA2|CDV|BK
+9|2026-12-12|17:00|AC2|NC|DG
+9|2026-12-12|17:00|BRA|AP|CDV
+9|2026-12-12|19:00|BRA|JM|BK
+9|2026-12-13|17:00|AC1|RV|SP
+9|2026-12-13|17:00|AC2|OR|RI
+10|2026-12-20|10:00|AC2|BK|AP
+10|2026-12-20|17:00|AA1|CDV|NC
+10|2026-12-20|17:00|AA2|JM|SP
+10|2026-12-20|18:00|AA1|DG|OR
+10|2026-12-20|18:00|AA2|RI|RLV
+11|2027-01-10|||OR|CDV
+11|2027-01-10|||AP|JM
+11|2027-01-10|||NC|BK
+11|2027-01-10|||RV|RI
+11|2027-01-10|||RLV|DG
+`.trim().split('\n').map(x => { const [j, fecha, hora, campo, a, b] = x.split('|'); return { j: +j, fecha, hora, campo, l: LIGA_COD[a], v: LIGA_COD[b] }; });
+LIGA_DEF.calendario = LIGA_CAL_DEF;
+
+function ligaCalendario(L) {
+    if (Array.isArray(L.calendario) && L.calendario.length) return L.calendario;
+    const mismos = L.equipos.length === LIGA_DEF.equipos.length && LIGA_DEF.equipos.every(e => L.equipos.includes(e));
+    return mismos ? LIGA_CAL_DEF : [];
+}
+const ligaResultadoDe = (L, a, b) => (L.resultados || []).find(r => ligaClavePar(r.l, r.v) === ligaClavePar(a, b)) || null;
+const ligaPartidoCal = (L, a, b) => ligaCalendario(L).find(m => ligaClavePar(m.l, m.v) === ligaClavePar(a, b)) || null;
+function ligaProximoNuestro(L) {
+    return ligaCalendario(L).filter(m => (m.l === L.nuestro || m.v === L.nuestro) && !ligaResultadoDe(L, m.l, m.v))
+        .sort((a, b) => a.j - b.j)[0] || null;
+}
+function ligaJornadaEnCurso(L) {
+    const pend = ligaCalendario(L).filter(m => !ligaResultadoDe(L, m.l, m.v));
+    return pend.length ? Math.min(...pend.map(m => m.j)) : null;
+}
+function ligaDescansa(L, j) {
+    const ms = ligaCalendario(L).filter(m => m.j === j);
+    if (!ms.length) return null;
+    const t = new Set(); ms.forEach(m => { t.add(m.l); t.add(m.v); });
+    return L.equipos.find(e => !t.has(e)) || null;
+}
+function ligaFechaTxt(m, sinCampo) {
+    if (!m || !m.fecha) return '';
+    const d = new Date(m.fecha + 'T12:00:00');
+    const dias = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'], meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    return `${dias[d.getDay()]} ${d.getDate()} ${meses[d.getMonth()]}${m.hora ? ' · ' + m.hora : ''}${m.campo && !sinCampo ? ' · campo ' + m.campo : ''}`;
+}
+
+/* ---------- LIGA ---------- */
+let _ligaSim = { k: null, r: null };
+const pctV = p => p >= 0.995 ? '>99%' : p > 0 && p < 0.005 ? '<1%' : Math.round(p * 100) + '%';
+function pintarLiga() {
+  const el = document.getElementById('p-liga');
+  const L = D && D.liga;
+  if (!L || !Array.isArray(L.equipos) || !L.equipos.length) { el.innerHTML = `<div class="card vacio"><span class="ic">🏆</span>La clasificación aparecerá cuando se publique desde la app.</div>`; return; }
+  const tabla = ligaClasificacion(L), lim = L.equipos.length - (L.descienden || 0);
+  const nJ = L.equipos.length % 2 ? L.equipos.length : L.equipos.length - 1, act = ligaJornadaActual(L), pend = ligaPendientes(L).length;
+  const k = JSON.stringify([L.equipos, L.resultados, L.nuestro, L.descienden]);
+  let sim = '';
+  if (pend) {
+    if (_ligaSim.k !== k) _ligaSim = { k, r: ligaSimular(L, 5000) };
+    const S = _ligaSim.r, pN = S.probs[L.nuestro];
+    if (pN) {
+      const maxP = Math.max(...pN.porPuesto, 0.01), c = S.partidoClave;
+      sim = `<div class="card"><div class="card-t"><span>🎲 Cómo puede acabar ${info('liga')}</span><span>${String(S.N).replace(/\B(?=(\d{3})+(?!\d))/g, '.')} simulaciones</span></div>
+        <div class="grid4"><div class="box"><div class="v" style="color:var(--ambar);">${pctV(pN.campeon)}</div><div class="l">Campeón</div></div>
+          <div class="box"><div class="v" style="color:var(--verde);">${pctV(pN.salva)}</div><div class="l">Salvarse</div></div>
+          <div class="box"><div class="v" style="color:var(--rojo);">${pctV(pN.desc)}</div><div class="l">Descenso</div></div>
+          <div class="box"><div class="v">${num(pN.medio, 1)}º</div><div class="l">Puesto medio</div></div></div>
+        <div class="sub" style="margin:12px 0 4px;">Probabilidad de acabar en cada puesto</div>
+        <div style="display:flex; gap:3px; align-items:flex-end; height:84px;">${pN.porPuesto.map((p, i) => `<div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%;">
+          <div style="font-size:9.5px; color:var(--gris);">${p >= 0.01 ? Math.round(p * 100) : ''}</div>
+          <div style="width:100%; height:${Math.round(p / maxP * 58)}px; background:${i + 1 > S.limiteSalva ? 'var(--rojo)' : 'var(--turq)'}; border-radius:3px 3px 0 0;"></div>
+          <div style="font-size:9.5px; color:var(--gris2);">${i + 1}º</div></div>`).join('')}</div>
+        ${c ? `<div class="aviso" style="margin:12px 0 0; color:var(--texto);">🔑 <b style="color:var(--tiza);">Partido clave: vs ${esc(c.rival)}</b>${(() => { const mc = ligaPartidoCal(L, L.nuestro, c.rival); return mc ? ` <span style="color:var(--gris);">(J${mc.j}, ${esc(ligaFechaTxt(mc, true))})</span>` : ''; })()}<br>Si ganamos, ${pctV(c.siGana)} ${c.metrica === 'salva' ? 'de salvarnos' : 'de acabar primeros'}; si perdemos, ${pctV(c.siPierde)}.</div>` : ''}
+        <div class="tabla-wrap" style="margin-top:12px;"><table class="tb" style="min-width:0;"><thead><tr><th>Equipo</th><th>Campeón</th><th>Salvarse</th><th>Descenso</th></tr></thead><tbody>
+          ${tabla.map(f => { const q = S.probs[f.eq]; return `<tr${f.eq === L.nuestro ? ' class="mvp"' : ''}><td class="n">${esc(f.eq)}</td><td>${pctV(q.campeon)}</td><td class="pos-v">${pctV(q.salva)}</td><td class="neg-v">${pctV(q.desc)}</td></tr>`; }).join('')}
+        </tbody></table></div></div>`;
+    }
+  }
+  const ev = ligaEvolucion(L).filter(x => x.pos);
+  let evo = '';
+  if (ev.length >= 2) {
+    const n = L.equipos.length, W = 320, H = 150, Lm = 24, R = 10, T = 10, B = 20;
+    const x = i => Lm + i / (ev.length - 1) * (W - Lm - R), y = pos => T + (pos - 1) / (n - 1) * (H - T - B);
+    let g = `<rect x="${Lm}" y="${y(lim + 0.5)}" width="${W - Lm - R}" height="${H - B - y(lim + 0.5)}" style="fill:rgba(255,90,95,.12)"/>`;
+    [1, Math.ceil(n / 2), n].forEach(pp => { g += `<line x1="${Lm}" x2="${W - R}" y1="${y(pp)}" y2="${y(pp)}" style="stroke:var(--reja)"/>${svgTxt(Lm - 5, y(pp) + 3, pp + 'º', { a: 'end' })}`; });
+    g += `<polyline fill="none" style="stroke:var(--turq)" stroke-width="2.5" points="${ev.map((e, i) => x(i) + ',' + y(e.pos)).join(' ')}"/>`;
+    ev.forEach((e, i) => { g += `<circle cx="${x(i)}" cy="${y(e.pos)}" r="4" style="fill:var(--turq)"><title>J${e.j}: ${e.pos}º</title></circle>${svgTxt(x(i), H - 5, 'J' + e.j)}`; });
+    evo = `<div class="card"><div class="card-t"><span>📈 Nuestra posición jornada a jornada</span></div><svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Posición por jornada">${g}</svg><div class="nota">En rojo, la zona de descenso.</div></div>`;
+  }
+  const porJ = {};
+  (L.resultados || []).forEach(r => (porJ[r.j] = porJ[r.j] || []).push(r));
+  const js = Object.keys(porJ).map(Number).sort((a, b) => b - a);
+  el.innerHTML = htmlProximoLiga(L) + `
+    <div class="card"><div class="card-t"><span>🏆 ${esc(L.nombre || 'Clasificación')}</span><span>J${act} de ${nJ}</span></div>
+      <div class="tabla-wrap"><table class="tb" style="min-width:0;"><thead><tr><th>#</th><th style="text-align:left;">Equipo</th><th>PJ</th><th>G</th><th>E</th><th>P</th><th>Goles</th><th>Pts</th></tr></thead><tbody>
+        ${tabla.map(f => `<tr${f.eq === L.nuestro ? ' class="mvp"' : ''}><td style="${f.pos > lim ? 'box-shadow:inset 3px 0 0 var(--rojo);' : ''}">${f.pos}</td><td class="n" style="max-width:130px; text-align:left;">${esc(f.eq)}</td><td>${f.pj}</td><td>${f.g}</td><td>${f.e}</td><td>${f.p}</td><td>${f.gf}:${f.gc}</td><td style="font-weight:800; color:var(--tiza);">${f.pts}</td></tr>`).join('')}
+      </tbody></table></div>
+      <div class="nota">Raya roja: bajan los ${L.descienden} últimos. ${pend ? `Quedan ${plural(pend, 'partido', 'partidos')}.` : 'Liga terminada.'}</div></div>
+    ${sim}${evo}
+    ${htmlCalendarioLiga(L, nJ)}
+    ${!ligaCalendario(L).length && js.length ? `<div class="card"><div class="card-t"><span>📋 Resultados</span></div>${js.map(j => `<div class="sub" style="margin:8px 0 2px; font-weight:700;">JORNADA ${j}</div>
+      ${porJ[j].map(r => `<div class="fila" style="padding:6px 2px;"><div class="nom" style="font-weight:600; font-size:12.5px; white-space:normal;">${esc(r.l)} <b style="color:var(--turq);">${r.gl}-${r.gv}</b> ${esc(r.v)}</div></div>`).join('')}`).join('')}</div>` : ''}`;
+}
+
+function htmlProximoLiga(L) {
+  const m = L && ligaProximoNuestro(L);
+  if (!m) return '';
+  const casa = m.l === L.nuestro, rival = casa ? m.v : m.l;
+  const f = ligaClasificacion(L).find(x => x.eq === rival);
+  return `<div class="card" style="border-color:rgba(0,217,196,.35);"><div class="card-t" style="color:var(--turq);"><span>⏭️ Próximo partido</span><span>Jornada ${m.j}</span></div>
+    <div style="font-weight:700; font-size:16px; color:var(--tiza);">${casa ? '🏠' : '✈️'} vs ${esc(rival)}${f ? ` <span style="font-size:12px; color:var(--gris); font-weight:600;">(${f.pos}º, ${f.pts} pts)</span>` : ''}</div>
+    <div class="mt" style="font-size:12px; color:var(--gris); margin-top:4px;">${esc(ligaFechaTxt(m)) || 'Fecha por confirmar'} · ${casa ? 'en casa' : 'fuera'}</div></div>`;
+}
+
+function htmlCalendarioLiga(L, nJ) {
+  const cal = ligaCalendario(L);
+  if (!cal.length) return '';
+  const j = estado.ligaJ || ligaJornadaEnCurso(L) || nJ;
+  const ms = cal.filter(m => m.j === j), desc = ligaDescansa(L, j);
+  return `<div class="card"><div class="card-t"><span>📅 Calendario</span></div>
+    <select class="sel" id="selLigaJ" aria-label="Jornada">${Array.from({ length: nJ }, (_, i) => `<option value="${i + 1}"${i + 1 === j ? ' selected' : ''}>Jornada ${i + 1}${i + 1 === ligaJornadaEnCurso(L) ? ' · en juego' : ''}</option>`).join('')}</select>
+    ${ms.map(m => { const r = ligaResultadoDe(L, m.l, m.v), nos = m.l === L.nuestro || m.v === L.nuestro;
+      const gl = r ? (r.l === m.l ? r.gl : r.gv) : null, gv = r ? (r.l === m.l ? r.gv : r.gl) : null;
+      return `<div class="fila" style="display:block; padding:8px 4px; ${nos ? 'background:rgba(0,217,196,.08); border-radius:8px;' : ''}">
+        <div class="sub" style="margin:0 0 3px;">${esc(ligaFechaTxt(m)) || 'Fecha por confirmar'}</div>
+        <div style="display:grid; grid-template-columns:1fr auto 1fr; gap:8px; align-items:center; font-size:12.5px; font-weight:700; color:var(--tiza);">
+          <span style="text-align:right;">${esc(m.l)}</span>
+          <span class="osw" style="font-size:15px; color:${r ? 'var(--turq)' : 'var(--gris2)'}; white-space:nowrap;">${r ? gl + ' – ' + gv : 'vs'}</span>
+          <span>${esc(m.v)}</span></div></div>`; }).join('')}
+    ${desc ? `<div class="nota">😴 Descansa: ${esc(desc)}</div>` : ''}</div>`;
+}
+
 /* ---------- navegación y modales ---------- */
 function pintarTodo() {
   if (!D) return;
-  pintarResumen(); pintarPartidos(); pintarRanking(); pintarPanel(); pintarMvp(); pintarRecords();
+  pintarResumen(); pintarPartidos(); pintarRanking(); pintarPanel(); pintarMvp(); pintarRecords(); pintarLiga();
   // si hay un modal abierto, se refresca con los datos nuevos
   if (document.getElementById('mPartido').classList.contains('abierto') && estado.ficha) abrirPartido(estado.ficha.idx);
 }
@@ -1341,6 +1729,7 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('change', e => {
   if (e.target.id === 'selCrit') { estado.rCrit = e.target.value; pintarRanking(); }
+  if (e.target.id === 'selLigaJ') { estado.ligaJ = +e.target.value; pintarLiga(); }
   if (e.target.id === 'selEvo') { estado.evMet = e.target.value; document.getElementById('evoGraf').innerHTML = graficaEvolucion(estado.jug, estado.evMet); }
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { const m = [...document.querySelectorAll('.modal.abierto')].pop(); if (m) cerrar(m.id); } });
