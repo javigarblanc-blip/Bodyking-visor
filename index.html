@@ -382,6 +382,11 @@ const GUIA = [
   ['asistencia', '📋 Asistencia', `<p>Porcentaje de convocatorias a las que ha venido. La <b>racha</b> son las convocatorias seguidas viniendo hasta hoy; 🔥 marca la más larga del grupo.</p>`],
   ['tramos', '⏱ Goles por tramos', `<p>En qué momento del partido marcamos (verde, arriba) y encajamos (rojo, abajo), en tramos de 5 minutos y sumando toda la temporada.</p>`],
   ['rival', '🎯 Según el nivel del rival', `<p>Victorias, empates y derrotas según cómo era el rival (superior, parecido o asequible). El nivel lo pone el analista al terminar cada partido.</p>`],
+  ['insights', '🔍 Lo que dicen los datos', `<p>Frases automáticas que salen al grabar cada partido. No las escribe una IA: son reglas fijas que revisan los datos y avisan de lo más llamativo.</p>
+    <ul><li><b>Del partido:</b> rachas marcando, sequías de tiros o goles, hitos (5, 10, 15… goles), cambio de líder de goleadores, MVP repetido y rachas del equipo.</li>
+    <li><b>De la temporada:</b> en qué minutos marcamos o encajamos, cómo cambia el equipo con o sin un jugador en el campo, rendimiento contra rivales superiores y tendencia de pérdidas.</li>
+    <li>Solo cuentan partidos de liga y hace falta muestra mínima (al menos 3–6 partidos y 50' con y sin el jugador, según el caso).</li>
+    <li>Las tendencias de temporada no se repiten si ya salieron en uno de los dos partidos anteriores.</li></ul>`],
   ['records', '🏅 Récords', `<ul><li>Solo cuentan los partidos de liga.</li><li>Si dos igualan un récord, se queda el primero que lo consiguió.</li>
     <li><b>Rachas de jugador:</b> cuentan solo los partidos que juega; si no juega, la racha no se corta.</li>
     <li><b>Mayor remontada:</b> la mayor desventaja que llegamos a tener en un partido que acabamos ganando. Necesita el minuto de todos los goles.</li>
@@ -424,6 +429,7 @@ function pintarResumen() {
           <div class="mt">${mvpU ? `⭐ MVP: ${esc(mvpU.nombre)}` : ''}${informeDe(ult) ? ' · 🤖 con informe IA' : ''}</div></div>
         <span class="chip-res ${res(ult)}">${ult.golesH} – ${ult.golesR}</span><span class="flecha">›</span>
       </div>
+      ${insightsDe(idxPartido(ult)).length ? `<div style="border-top:1px solid var(--linea); margin-top:6px; padding-top:6px;"><div class="sub" style="margin:0 0 2px; font-weight:700; text-transform:uppercase; letter-spacing:.3px; font-size:10.5px; color:var(--turq);">🔍 Lo que dicen los datos ${info('insights')}</div>${htmlInsights(insightsDe(idxPartido(ult)), 3)}</div>` : ''}
     </div>
     <div class="card">
       <div class="card-t"><span>🏆 Temporada</span><span>${plural(ps.length, 'partido', 'partidos')}</span></div>
@@ -520,6 +526,7 @@ function abrirPartido(idx, orden) {
         </table></div>
         <div class="nota" style="padding:0 4px;">✅ recuperaciones · ❌ pérdidas · 🎯 tiros · Imp impacto. Toca una columna para ordenar o un jugador para ver su detalle.</div>
       </div>
+      ${insightsDe(idx).length ? `<div class="card" style="border-color:rgba(0,217,196,.3);"><div class="card-t" style="color:var(--turq);"><span>🔍 Lo que dicen los datos ${info('insights')}</span></div>${htmlInsights(insightsDe(idx))}</div>` : ''}
       ${inf ? `<div class="card"><details class="ia"><summary>🤖 Informe del partido (IA) ›</summary><div class="txt">${esc(inf.texto)}</div></details></div>` : ''}
     </div>`;
   abrir('mPartido');
@@ -953,6 +960,200 @@ function pintarMvp() {
   el.innerHTML = `<div class="aviso" style="color:var(--texto); background:rgba(0,217,196,.06); border-color:rgba(0,217,196,.25);">🌟 Cada 4 partidos de liga se elige un MVP: el jugador con mejor impacto medio (med) en ese bloque. En azul, su impacto total (imp). ${info('mvp')}</div>`
     + topBal + bloques.map((b, i) => ({ b, n: i + 1 })).reverse().map(x => bloque(x.b, x.n)).join('');
 }
+
+/* ── INSIGHTS AUTOMÁTICOS (mismo cálculo en app y visor) ──
+   Detectores fijos, sin IA: miran los partidos de liga grabados hasta cada partido
+   y sacan las frases más llamativas. Los "patrones" (tendencias de temporada)
+   no se repiten si ya salieron en uno de los 2 partidos de liga anteriores. */
+function calcularInsightsTodos(partidos, durDef) {
+    durDef = durDef || 50;
+    const todos = Array.isArray(partidos) ? partidos : [];
+    const out = {};
+    const liga = [], idxs = [], mostrados = [];
+    todos.forEach((p, i) => {
+        if (!p || p.tipo === 'amistoso') return;
+        liga.push(p); idxs.push(i);
+        const n = liga.length - 1;
+        const prev = new Set([].concat(mostrados[n - 1] || [], mostrados[n - 2] || []));
+        const lista = insightsBase(liga.slice(), durDef)
+            .filter(x => !(x.patron && prev.has(x.clave)))
+            .sort((a, b) => b.peso - a.peso)
+            .slice(0, 4);
+        mostrados.push(lista.filter(x => x.patron).map(x => x.clave));
+        out[i] = lista;
+    });
+    return out;
+}
+
+function insightsBase(ps, durDef) {
+    const R = [];
+    const n = ps.length;
+    if (!n) return R;
+    const cur = ps[n - 1];
+    const add = (clave, ic, txt, peso, patron) => R.push({ clave, ic, txt, peso, patron: !!patron });
+    const dur = p => p.duracion || durDef;
+    const jDe = (p, nom) => (p.jugadores || []).find(j => j.nombre === nom) || null;
+    const jugo = (p, nom, minMin) => { const j = jDe(p, nom); return j && (j.minutos || 0) > (minMin || 0) ? j : null; };
+    const pct = (a, b) => Math.round(a / b * 100);
+    const plural = (k, s, pl) => `${k} ${k === 1 ? s : pl}`;
+    const res = p => (p.golesH || 0) > (p.golesR || 0) ? 'V' : (p.golesH || 0) < (p.golesR || 0) ? 'D' : 'E';
+    const enCur = (cur.jugadores || []).filter(j => (j.minutos || 0) > 0);
+
+    /* 1. Tramos del partido (patrones) */
+    if (n >= 3) {
+        const conMin = ps.filter(p => Array.isArray(p.golesMin) && p.golesMin.length);
+        const C = [], F = [];
+        conMin.forEach(p => p.golesMin.forEach(g => (g.t === 'C' ? C : F).push({ min: g.min, dur: dur(p) })));
+        if (C.length >= 5) {
+            const fin = C.filter(g => g.min > g.dur - 10).length, ini = C.filter(g => g.min <= 10).length;
+            if (fin / C.length >= 0.4) add('tramoFinC', '⏱', `El ${pct(fin, C.length)}% de los goles encajados llega en los últimos 10 minutos (${fin} de ${C.length}).`, 45 + (fin / C.length - 0.4) * 100, true);
+            if (ini / C.length >= 0.35) add('tramoIniC', '⏱', `El ${pct(ini, C.length)}% de los goles encajados llega en los primeros 10 minutos (${ini} de ${C.length}).`, 42 + (ini / C.length - 0.35) * 100, true);
+        }
+        if (F.length >= 6) {
+            const seg = F.filter(g => g.min > g.dur / 2).length, r = seg / F.length;
+            if (r >= 0.65) add('mitadF', '⚽', `El ${pct(seg, F.length)}% de nuestros goles llega en la 2ª parte.`, 35 + (r - 0.65) * 80, true);
+            else if (r <= 0.35) add('mitadF', '⚽', `El ${pct(F.length - seg, F.length)}% de nuestros goles llega en la 1ª parte.`, 35 + (0.35 - r) * 80, true);
+        }
+    }
+
+    /* 2. Rachas y sequías individuales (hechos del último partido) */
+    enCur.forEach(j => {
+        const nom = j.nombre;
+        // partidos jugados por él, del más reciente hacia atrás
+        const suyos = [];
+        for (let k = n - 1; k >= 0; k--) { const x = jugo(ps[k], nom); if (x) suyos.push(x); }
+        if ((j.goles || 0) > 0) {
+            let r = 0; for (const x of suyos) { if ((x.goles || 0) > 0) r++; else break; }
+            if (r >= 3) add('marca-' + nom, '🔥', `${nom} ha marcado en ${r} partidos seguidos.`, 60 + (r - 3) * 8);
+        }
+        if ((j.minutos || 0) >= 15) {
+            const largos = suyos.filter(x => (x.minutos || 0) >= 15);
+            let r = 0; for (const x of largos) { if (!(x.tiros || 0) && !(x.goles || 0)) r++; else break; }
+            const antes = largos.slice(r).reduce((s, x) => s + (x.tiros || 0) + (x.goles || 0), 0);
+            if (r >= 3 && antes >= 3) add('sinTiro-' + nom, '🎯', `${nom} lleva ${r} partidos sin tirar a puerta (antes sumaba ${antes} tiros y goles).`, 48 + (r - 3) * 6);
+            else {
+                const golesTemp = suyos.reduce((s, x) => s + (x.goles || 0), 0);
+                let g = 0; for (const x of suyos) { if (!(x.goles || 0)) g++; else break; }
+                if (g >= 3 && golesTemp >= 3) add('sinGol-' + nom, '🥶', `${nom} lleva ${g} partidos sin marcar (tiene ${plural(golesTemp, 'gol', 'goles')} en la temporada).`, 44 + (g - 3) * 6);
+            }
+        }
+    });
+
+    /* 3. Hitos y liderato de goleadores */
+    {
+        const acum = (hasta, campo) => { const t = {}; ps.slice(0, hasta).forEach(p => (p.jugadores || []).forEach(j => { t[j.nombre] = (t[j.nombre] || 0) + (j[campo] || 0); })); return t; };
+        const gAntes = acum(n - 1, 'goles'), gAhora = acum(n, 'goles');
+        const aAntes = acum(n - 1, 'asistencias'), aAhora = acum(n, 'asistencias');
+        const HITOS = [5, 10, 15, 20, 25, 30, 40, 50];
+        enCur.forEach(j => {
+            const h = HITOS.filter(x => (gAntes[j.nombre] || 0) < x && (gAhora[j.nombre] || 0) >= x).pop();
+            if (h) add('hitoG-' + j.nombre, '🎉', `${j.nombre} llega a ${h} goles en la temporada.`, 55 + h / 2);
+            const ha = HITOS.filter(x => (aAntes[j.nombre] || 0) < x && (aAhora[j.nombre] || 0) >= x).pop();
+            if (ha) add('hitoA-' + j.nombre, '👟', `${j.nombre} llega a ${ha} asistencias en la temporada.`, 46 + ha / 2);
+        });
+        const lider = t => { const o = Object.entries(t).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]); return o.length && (o.length === 1 || o[0][1] > o[1][1]) ? o[0] : null; };
+        const lA = lider(gAntes), lN = lider(gAhora);
+        if (lN && (!lA || lA[0] !== lN[0]) && n > 1) add('liderG', '👑', `${lN[0]} se pone líder de goleadores con ${lN[1]} goles.`, 58);
+        else if (lN) {
+            const o = Object.entries(gAhora).sort((a, b) => b[1] - a[1]);
+            if (o[1] && lN[1] - o[1][1] === 1 && o[1][1] >= 3) add('persigue', '👀', `${o[1][0]} se queda a 1 gol del máximo goleador (${lN[0]}, ${lN[1]}).`, 34, true);
+        }
+    }
+
+    /* 4. Con / sin un jugador en el campo (patrón) */
+    {
+        const psPM = ps.filter(p => (p.jugadores || []).some(j => j.golesContraPista !== undefined || j.golesFavorPista !== undefined));
+        if (psPM.length >= 4) {
+            const minEq = psPM.reduce((s, p) => s + dur(p), 0);
+            const GF = psPM.reduce((s, p) => s + (p.golesH || 0), 0), GC = psPM.reduce((s, p) => s + (p.golesR || 0), 0);
+            const st = {};
+            psPM.forEach(p => (p.jugadores || []).forEach(j => {
+                const s = st[j.nombre] || (st[j.nombre] = { min: 0, gf: 0, gc: 0 });
+                s.min += j.minutos || 0; s.gf += j.golesFavorPista || 0; s.gc += j.golesContraPista || 0;
+            }));
+            let bDef = null, bOf = null;
+            Object.entries(st).forEach(([nom, s]) => {
+                const minSin = minEq - s.min;
+                if (s.min < 50 || minSin < 50) return;
+                const gcSin = GC - s.gc, gfSin = GF - s.gf;
+                const rC = s.gc / s.min, rS = gcSin / minSin;
+                if (gcSin >= 3 && rS >= 1.8 * rC) { const sc = rS / (rC + 0.004); if (!bDef || sc > bDef.sc) bDef = { nom, sc, s, minSin, gcSin }; }
+                const fC = s.gf / s.min, fS = gfSin / minSin;
+                if (s.gf >= 3 && fC >= 1.6 * fS) { const sc = fC / (fS + 0.004); if (!bOf || sc > bOf.sc) bOf = { nom, sc, s, minSin, gfSin }; }
+            });
+            const cada = (m, g) => `1 gol cada ${Math.round(m / g)}'`;
+            if (bDef) {
+                const t = bDef.s.gc === 0
+                    ? `Con ${bDef.nom} en el campo no se ha encajado ningún gol en ${bDef.s.min}'; sin él, ${cada(bDef.minSin, bDef.gcSin)}.`
+                    : `Con ${bDef.nom} en el campo encajáis ${cada(bDef.s.min, bDef.s.gc)}; sin él, ${cada(bDef.minSin, bDef.gcSin)}.`;
+                add('conDef-' + bDef.nom, '🛡️', t, 52 + Math.min(30, bDef.sc * 3), true);
+            }
+            if (bOf) {
+                const t = bOf.gfSin === 0
+                    ? `Con ${bOf.nom} en el campo marcáis ${cada(bOf.s.min, bOf.s.gf)}; sin él, ninguno en ${bOf.minSin}'.`
+                    : `Con ${bOf.nom} en el campo marcáis ${cada(bOf.s.min, bOf.s.gf)}; sin él, ${cada(bOf.minSin, bOf.gfSin)}.`;
+                add('conOf-' + bOf.nom, '⚡', t, 50 + Math.min(30, bOf.sc * 3), true);
+            }
+        }
+    }
+
+    /* 5. Según el nivel del rival (patrón) */
+    {
+        const SUP = ['muy-superior', 'superior'];
+        const sup = ps.filter(p => SUP.includes(p.nivelRival)), resto = ps.filter(p => p.nivelRival && !SUP.includes(p.nivelRival));
+        if (sup.length >= 2 && resto.length >= 2) {
+            const m = a => a.reduce((s, p) => s + (p.golesH || 0), 0) / a.length;
+            const gs = m(sup), gr = m(resto);
+            const f = v => String(Math.round(v * 10) / 10).replace('.', ',');
+            if (gr > 0 && gs / gr <= 0.6) add('nivelRival', '🎯', `Contra rivales superiores marcáis ${f(gs)} goles por partido, frente a ${f(gr)} contra el resto.`, 40 + (0.6 - gs / gr) * 40, true);
+        }
+    }
+
+    /* 6. Tendencia de pérdidas del equipo (patrón) */
+    {
+        const conDatos = ps.filter(p => (p.jugadores || []).some(j => (j.perdidas || 0) + (j.recuperaciones || 0) > 0));
+        if (conDatos.length >= 6 && conDatos[conDatos.length - 1] === cur) {
+            const per = p => (p.jugadores || []).reduce((s, j) => s + (j.perdidas || 0), 0);
+            const ult = conDatos.slice(-3), ant = conDatos.slice(0, -3);
+            const mU = ult.reduce((s, p) => s + per(p), 0) / 3, mA = ant.reduce((s, p) => s + per(p), 0) / ant.length;
+            if (mA >= 3) {
+                const d = (mU - mA) / mA;
+                if (d >= 0.3) add('tendPer', '📉', `Últimos 3 partidos: +${Math.round(d * 100)}% de pérdidas respecto a la media anterior.`, 45 + Math.min(20, d * 20), true);
+                else if (d <= -0.3) add('tendPer', '📈', `Últimos 3 partidos: ${Math.round(-d * 100)}% menos pérdidas que antes. El equipo cuida más el balón.`, 42 + Math.min(20, -d * 20), true);
+            }
+        }
+    }
+
+    /* 7. Rachas del equipo (hechos) */
+    {
+        const racha = ok => { let r = 0; for (let k = n - 1; k >= 0; k--) { if (ok(ps[k])) r++; else break; } return r; };
+        const v = racha(p => res(p) === 'V'), inv = racha(p => res(p) !== 'D'), d = racha(p => res(p) === 'D'), sg = racha(p => res(p) !== 'V');
+        if (v >= 3) add('rachaEq', '🔥', `${v} victorias seguidas.`, 50 + (v - 3) * 5);
+        else if (inv >= 4) add('rachaEq', '🛡️', `${inv} partidos seguidos sin perder.`, 46 + (inv - 4) * 4);
+        else if (d >= 3) add('rachaEq', '🩹', `${d} derrotas seguidas.`, 45 + (d - 3) * 4);
+        else if (sg >= 4) add('rachaEq', '🥶', `${sg} partidos seguidos sin ganar.`, 43 + (sg - 4) * 4);
+    }
+
+    /* 8. MVP repetido (hecho) */
+    {
+        const mvp = p => ((p.jugadores || []).filter(j => (j.minutos || 0) > 0).slice().sort((a, b) => (b.impacto || 0) - (a.impacto || 0) || (b.goles || 0) - (a.goles || 0) || (b.asistencias || 0) - (a.asistencias || 0))[0] || {}).nombre;
+        const m = mvp(cur);
+        if (m) {
+            let r = 0; for (let k = n - 1; k >= 0; k--) { if (mvp(ps[k]) === m) r++; else break; }
+            if (r >= 2) add('mvpRep', '⭐', `${m}, MVP ${r} partidos seguidos.`, 52 + (r - 2) * 6);
+        }
+    }
+
+    return R;
+}
+
+let _insCache = { clave: null, datos: {} };
+function insightsDe(idx) {
+  const clave = (META && META.actualizado) || 0;
+  if (_insCache.clave !== clave) { _insCache = { clave, datos: calcularInsightsTodos(D.partidos, DUR_DEF) }; }
+  return _insCache.datos[idx] || [];
+}
+const htmlInsights = (lista, max) => !lista.length ? '' : lista.slice(0, max || 4).map(x => `<div style="display:flex; gap:9px; align-items:flex-start; font-size:12.5px; line-height:1.45; padding:5px 0; color:var(--texto);"><span style="flex-shrink:0;">${x.ic}</span><span>${esc(x.txt)}</span></div>`).join('');
 
 /* ── RÉCORDS DE LA TEMPORADA (mismo cálculo en app y visor) ──
    ps: partidos de liga en orden de juego. Cada récord guarda en qué partido (idx) se consiguió;
