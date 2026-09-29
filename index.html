@@ -236,6 +236,7 @@
   <section class="panel" id="p-ranking"></section>
   <section class="panel" id="p-panel"></section>
   <section class="panel" id="p-mvp"></section>
+  <section class="panel" id="p-records"></section>
 
   <p class="pie">Bodyking FC · visor de solo lectura<br>© Javi García Blanco · <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener">CC BY-NC-SA 4.0</a></p>
 </div>
@@ -247,6 +248,7 @@
   <button class="tab" data-tab="ranking"><span class="ic">📊</span>Ranking</button>
   <button class="tab" data-tab="panel"><span class="ic">📈</span>Panel</button>
   <button class="tab" data-tab="mvp"><span class="ic">🌟</span>MVP</button>
+  <button class="tab" data-tab="records"><span class="ic">🏅</span>Récords</button>
 </div></nav>
 
 <div id="golAviso" role="status" aria-live="polite"><div class="a">⚽ ¡GOOOL DE BODYKING!</div><div class="b" id="golAvisoB"></div></div>
@@ -380,6 +382,10 @@ const GUIA = [
   ['asistencia', '📋 Asistencia', `<p>Porcentaje de convocatorias a las que ha venido. La <b>racha</b> son las convocatorias seguidas viniendo hasta hoy; 🔥 marca la más larga del grupo.</p>`],
   ['tramos', '⏱ Goles por tramos', `<p>En qué momento del partido marcamos (verde, arriba) y encajamos (rojo, abajo), en tramos de 5 minutos y sumando toda la temporada.</p>`],
   ['rival', '🎯 Según el nivel del rival', `<p>Victorias, empates y derrotas según cómo era el rival (superior, parecido o asequible). El nivel lo pone el analista al terminar cada partido.</p>`],
+  ['records', '🏅 Récords', `<ul><li>Solo cuentan los partidos de liga.</li><li>Si dos igualan un récord, se queda el primero que lo consiguió.</li>
+    <li><b>Rachas de jugador:</b> cuentan solo los partidos que juega; si no juega, la racha no se corta.</li>
+    <li><b>Mayor remontada:</b> la mayor desventaja que llegamos a tener en un partido que acabamos ganando. Necesita el minuto de todos los goles.</li>
+    <li><b>Minutos sin encajar:</b> como la racha de porteros, sumando de un partido a otro.</li></ul>`],
   ['directo', '🔴 Directo', `<p>Se actualiza solo mientras se juega. En <b>Lo que va pasando</b> salen goles, tarjetas, cambios, tiros y paradas. Las recuperaciones y pérdidas solo se ven como totales en la tabla.</p><p><b>Sin encajar</b> son los minutos desde el último gol recibido, contando los del partido anterior.</p>`]
 ];
 function abrirGuia(k) {
@@ -948,10 +954,159 @@ function pintarMvp() {
     + topBal + bloques.map((b, i) => ({ b, n: i + 1 })).reverse().map(x => bloque(x.b, x.n)).join('');
 }
 
+/* ── RÉCORDS DE LA TEMPORADA (mismo cálculo en app y visor) ──
+   ps: partidos de liga en orden de juego. Cada récord guarda en qué partido (idx) se consiguió;
+   en caso de empate se queda el primero que lo logró. */
+function calcularRecords(ps, durDef) {
+    durDef = durDef || 50;
+    const out = [];
+    const resu = p => (p.golesH || 0) > (p.golesR || 0) ? 'V' : (p.golesH || 0) < (p.golesR || 0) ? 'D' : 'E';
+    const vs = p => `vs ${p.rival || 'Rival'} ${p.golesH || 0}-${p.golesR || 0}`;
+    const add = r => out.push(r);
+
+    /* --- Equipo: un partido --- */
+    const mejorPartido = (f, cond) => {
+        let best = null, bi = -1;
+        ps.forEach((p, i) => { const v = f(p); if (cond(v, p) && (best === null || v > best)) { best = v; bi = i; } });
+        return bi < 0 ? null : { v: best, i: bi };
+    };
+    let m = mejorPartido(p => (p.golesH || 0) - (p.golesR || 0), v => v > 0);
+    if (m) add({ id: 'victoria', grupo: 'equipo', ic: '💥', t: 'Mayor victoria', valor: `${ps[m.i].golesH}-${ps[m.i].golesR}`, det: `vs ${ps[m.i].rival} · ${ps[m.i].fecha || ''}`, idx: m.i });
+    m = mejorPartido(p => (p.golesR || 0) - (p.golesH || 0), v => v > 0);
+    if (m) add({ id: 'derrota', grupo: 'equipo', ic: '🩹', t: 'Peor derrota', valor: `${ps[m.i].golesH}-${ps[m.i].golesR}`, det: `vs ${ps[m.i].rival} · ${ps[m.i].fecha || ''}`, idx: m.i, malo: true });
+    m = mejorPartido(p => (p.golesH || 0) + (p.golesR || 0), v => v > 0);
+    if (m) add({ id: 'masgoles', grupo: 'equipo', ic: '🎆', t: 'Partido con más goles', valor: `${m.v} goles`, det: `${vs(ps[m.i])} · ${ps[m.i].fecha || ''}`, idx: m.i });
+
+    /* --- Equipo: rachas --- */
+    const racha = (ok, id, ic, t, malo) => {
+        let cur = 0, ini = 0, best = 0, bIni = -1, bFin = -1;
+        ps.forEach((p, i) => {
+            if (ok(p)) { if (!cur) ini = i; cur++; if (cur > best) { best = cur; bIni = ini; bFin = i; } }
+            else cur = 0;
+        });
+        if (best < 2) return;
+        const actual = cur ? ` · ahora: ${cur}` : '';
+        add({ id, grupo: 'equipo', ic, t, valor: `${best} partidos`, det: `de ${ps[bIni].rival} a ${ps[bFin].rival}${actual}`, idx: bFin, malo, enCurso: cur === best && bFin === ps.length - 1 });
+    };
+    racha(p => resu(p) === 'V', 'rachaV', '🔥', 'Más victorias seguidas');
+    racha(p => resu(p) !== 'D', 'rachaInv', '🛡️', 'Más partidos sin perder');
+    racha(p => (p.golesR || 0) === 0, 'rachaCero', '🧤', 'Porterías a cero seguidas');
+    racha(p => resu(p) !== 'V', 'rachaSinG', '🥶', 'Más partidos sin ganar', true);
+
+    // Minutos sin encajar (misma regla que las rachas de portería)
+    {
+        let actual = 0, max = 0, maxIdx = -1;
+        ps.forEach((p, i) => {
+            const dur = p.duracion || durDef;
+            const cs = (Array.isArray(p.golesMin) ? p.golesMin : []).filter(g => g.t === 'C').map(g => Math.min(dur, Math.max(0, g.min))).sort((a, b) => a - b);
+            if ((p.golesR || 0) > 0 && !cs.length) { actual = 0; return; }
+            let prev = 0;
+            cs.forEach(mn => { if (actual + mn - prev > max) { max = actual + mn - prev; maxIdx = i; } actual = 0; prev = mn; });
+            actual += dur - prev;
+            if (actual > max) { max = actual; maxIdx = i; }
+        });
+        if (max > 0) add({ id: 'sinEncajar', grupo: 'equipo', ic: '🔒', t: 'Más minutos sin encajar', valor: `${max}'`, det: `hasta ${vs(ps[maxIdx])}${actual === max ? ' · sigue en marcha' : ''}`, idx: maxIdx });
+    }
+
+    // Remontada: mayor desventaja durante el partido que acabó en victoria
+    {
+        let best = 0, bi = -1;
+        ps.forEach((p, i) => {
+            if (resu(p) !== 'V' || !Array.isArray(p.golesMin)) return;
+            if (p.golesMin.length !== (p.golesH || 0) + (p.golesR || 0)) return; // hace falta el minuto de todos los goles
+            let dif = 0, peor = 0;
+            p.golesMin.slice().sort((a, b) => a.min - b.min).forEach(g => { dif += g.t === 'F' ? 1 : -1; peor = Math.min(peor, dif); });
+            if (-peor > best) { best = -peor; bi = i; }
+        });
+        if (bi >= 0) add({ id: 'remontada', grupo: 'equipo', ic: '🔄', t: 'Mayor remontada', valor: `${best} ${best === 1 ? 'gol' : 'goles'}`, det: `perdíamos de ${best} y ganamos ${vs(ps[bi])}`, idx: bi });
+    }
+
+    // Gol más rápido y más tardío
+    {
+        let rap = null, rI = -1, tar = null, tI = -1;
+        ps.forEach((p, i) => (Array.isArray(p.golesMin) ? p.golesMin : []).filter(g => g.t === 'F').forEach(g => {
+            if (rap === null || g.min < rap) { rap = g.min; rI = i; }
+            if (tar === null || g.min > tar) { tar = g.min; tI = i; }
+        }));
+        if (rI >= 0) add({ id: 'golRapido', grupo: 'equipo', ic: '⚡', t: 'Gol más rápido', valor: `${rap}'`, det: `${vs(ps[rI])} · ${ps[rI].fecha || ''}`, idx: rI });
+        if (tI >= 0 && tar !== rap) add({ id: 'golTardio', grupo: 'equipo', ic: '⏰', t: 'Gol más tardío', valor: `${tar}'`, det: `${vs(ps[tI])} · ${ps[tI].fecha || ''}`, idx: tI });
+    }
+
+    /* --- Individual: en un solo partido --- */
+    const mejorJug = (id, ic, t, f, fmt, extra) => {
+        let best = null, bi = -1, bj = null;
+        ps.forEach((p, i) => (p.jugadores || []).forEach(j => {
+            if ((j.minutos || 0) <= 0) return;
+            const v = f(j);
+            if (v > 0 && (best === null || v > best)) { best = v; bi = i; bj = j; }
+        }));
+        if (bi < 0) return;
+        add({ id, grupo: 'partido', ic, t, quien: bj.nombre, valor: fmt(best), det: `${vs(ps[bi])} · ${ps[bi].fecha || ''}`, idx: bi, extra: extra ? extra(best) : '' });
+    };
+    const r1 = v => String(Math.round(v * 10) / 10).replace('.', ',');
+    mejorJug('jGoles', '⚽', 'Más goles', j => j.goles || 0, v => v, v => v >= 3 ? (v >= 4 ? 'póker' : 'hat-trick') : '');
+    mejorJug('jAsist', '👟', 'Más asistencias', j => j.asistencias || 0, v => v);
+    mejorJug('jGA', '🎯', 'Más goles + asistencias', j => (j.goles || 0) + (j.asistencias || 0), v => v);
+    mejorJug('jImpacto', '⭐', 'Mejor impacto', j => j.impacto || 0, v => '+' + r1(v));
+    mejorJug('jRecup', '✅', 'Más recuperaciones', j => j.recuperaciones || 0, v => v);
+    mejorJug('jBalance', '🔄', 'Mejor balance de balón', j => (j.recuperaciones || 0) - (j.perdidas || 0), v => '+' + v);
+    mejorJug('jParadas', '🧤', 'Más paradas', j => j.paradas || 0, v => v);
+
+    /* --- Individual: rachas de temporada (contando solo los partidos que juega) --- */
+    const rachaJug = (id, ic, t, ok) => {
+        const est = {};
+        let best = 0, bNom = null, bIni = -1, bFin = -1;
+        ps.forEach((p, i) => (p.jugadores || []).forEach(j => {
+            if ((j.minutos || 0) <= 0) return;
+            const s = est[j.nombre] || (est[j.nombre] = { cur: 0, ini: -1 });
+            if (ok(j)) { if (!s.cur) s.ini = i; s.cur++; if (s.cur > best) { best = s.cur; bNom = j.nombre; bIni = s.ini; bFin = i; } }
+            else s.cur = 0;
+        }));
+        if (best < 2) return;
+        const sigue = est[bNom] && est[bNom].cur === best;
+        add({ id, grupo: 'temporada', ic, t, quien: bNom, valor: `${best} partidos`, det: `de ${ps[bIni].rival} a ${ps[bFin].rival}${sigue ? ' · sigue en marcha' : ''}`, idx: bFin });
+    };
+    rachaJug('rMarcando', '🔥', 'Más partidos seguidos marcando', j => (j.goles || 0) > 0);
+    rachaJug('rImpacto', '📈', 'Más partidos seguidos con impacto positivo', j => (j.impacto || 0) > 0);
+
+    // Hat-tricks de la temporada
+    const hats = [];
+    ps.forEach((p, i) => (p.jugadores || []).forEach(j => { if ((j.goles || 0) >= 3) hats.push({ nombre: j.nombre, goles: j.goles, p, i }); }));
+
+    // Último récord batido: el conseguido en el partido más reciente (los "malos" no cuentan)
+    const buenos = out.filter(r => !r.malo);
+    const ultimo = buenos.length ? buenos.reduce((a, b) => b.idx > a.idx ? b : a) : null;
+    return { lista: out, ultimo, hats, total: ps.length };
+}
+
+/* ---------- RÉCORDS ---------- */
+function pintarRecords() {
+  const el = document.getElementById('p-records');
+  const ps = liga();
+  if (!ps.length) { el.innerHTML = `<div class="card vacio"><span class="ic">🏅</span>Los récords aparecerán en cuanto se grabe el primer partido.</div>`; return; }
+  const R = calcularRecords(ps, DUR_DEF);
+  const fila = r => `<div class="fila partido" data-partido="${idxPartido(ps[r.idx])}">
+      <span style="font-size:20px; width:26px; text-align:center; flex-shrink:0;">${r.ic}</span>
+      <div style="flex:1; min-width:0;"><div class="sub" style="margin:0; font-weight:700; text-transform:uppercase; letter-spacing:.3px; font-size:10.5px;">${esc(r.t)}</div>
+        ${r.quien ? `<div style="font-weight:700; font-size:14px; color:var(--tiza);">${esc(r.quien)}${r.extra ? ` <span style="background:var(--ambar); color:#1a1200; font-size:9.5px; font-weight:800; padding:1px 6px; border-radius:5px; text-transform:uppercase; vertical-align:1px;">⚽⚽⚽ ${esc(r.extra)}</span>` : ''}</div>` : ''}
+        <div class="mt">${esc(r.det)}${r.idx === R.total - 1 ? ' · <b style="color:var(--turq);">último partido</b>' : ''}</div></div>
+      <div class="val" style="${r.malo ? 'color:var(--rojo);' : ''}">${esc(r.valor)}</div><span class="flecha">›</span></div>`;
+  const seccion = (t, g) => { const l = R.lista.filter(r => r.grupo === g); return l.length ? `<div class="card"><div class="card-t"><span>${t}</span></div>${l.map(fila).join('')}</div>` : ''; };
+  const u = R.ultimo;
+  el.innerHTML = (u ? `<div class="card partido" data-partido="${idxPartido(ps[u.idx])}" style="background:linear-gradient(135deg,rgba(0,137,123,.35),rgba(0,105,92,.2)); border-color:rgba(0,217,196,.3);">
+      <div class="card-t" style="color:var(--turq);"><span>🏅 ${u.idx === R.total - 1 ? 'Récord batido en el último partido' : 'Último récord conseguido'} ${info('records')}</span></div>
+      <div style="display:flex; align-items:center; gap:10px;"><div style="flex:1; min-width:0;"><div style="font-weight:700; font-size:15px; color:var(--tiza);">${u.ic} ${esc(u.t)}${u.quien ? ' · ' + esc(u.quien) : ''}</div>
+        <div class="mt">${esc(u.det)}</div></div><div class="val" style="font-size:22px;">${esc(u.valor)}</div></div></div>` : '')
+    + seccion('👥 Equipo', 'equipo') + seccion('⚽ En un solo partido', 'partido') + seccion('📆 Rachas de temporada', 'temporada')
+    + (R.hats.length ? `<div class="card"><div class="card-t"><span>⚽⚽⚽ Hat-tricks</span><span>${R.hats.length}</span></div>
+        ${R.hats.map(h => `<div class="fila partido" data-partido="${idxPartido(h.p)}">${circulo(h.nombre)}<div class="nom">${esc(h.nombre)}<div class="sub">vs ${esc(h.p.rival)} · ${esc(h.p.fecha || '')}</div></div><div class="val">${h.goles} ⚽</div><span class="flecha">›</span></div>`).join('')}</div>` : '')
+    + `<div class="nota" style="margin:0 4px 10px;">Toca un récord para ver ese partido. Solo liga; si hay empate, se queda el primero que lo consiguió.</div>`;
+}
+
 /* ---------- navegación y modales ---------- */
 function pintarTodo() {
   if (!D) return;
-  pintarResumen(); pintarPartidos(); pintarRanking(); pintarPanel(); pintarMvp();
+  pintarResumen(); pintarPartidos(); pintarRanking(); pintarPanel(); pintarMvp(); pintarRecords();
   // si hay un modal abierto, se refresca con los datos nuevos
   if (document.getElementById('mPartido').classList.contains('abierto') && estado.ficha) abrirPartido(estado.ficha.idx);
 }
