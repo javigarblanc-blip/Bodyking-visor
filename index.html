@@ -1437,6 +1437,7 @@ function ligaSimular(L, N) {
     const cmpDesempate = (a, b) => mPts[b] - mPts[a] || mDg[b] - mDg[a] || (gf[b] - gc[b]) - (gf[a] - gc[a]) || gf[b] - gf[a] || rango[a] - rango[b];
 
     const cuenta = {}; eqs.forEach(e => { cuenta[e] = new Array(n).fill(0); });
+    const sumaPts = new Float64Array(n);
     const nuestro = L.nuestro, iN = idx[nuestro] === undefined ? -1 : idx[nuestro];
     const nuestros = [];
     P.forEach((m, k) => { if (m[0] === iN || m[1] === iN) nuestros.push(k); });
@@ -1468,6 +1469,7 @@ function ligaSimular(L, N) {
             }
             i = k;
         }
+        for (let i = 0; i < n; i++) sumaPts[i] += pts[i];
         let posN = -1;
         for (let i = 0; i < n; i++) { cuenta[eqs[orden[i]]][i]++; if (orden[i] === iN) posN = i + 1; }
         nuestros.forEach((k, q) => {
@@ -1478,10 +1480,12 @@ function ligaSimular(L, N) {
         });
     }
     const probs = {};
-    eqs.forEach(e => {
+    eqs.forEach((e, i) => {
         const c = cuenta[e].map(x => x / N);
         probs[e] = {
             porPuesto: c,
+            ptsEsperados: sumaPts[i] / N,
+            podio: c.slice(0, 3).reduce((s, p) => s + p, 0),
             medio: c.reduce((s, p, i) => s + p * (i + 1), 0),
             campeon: c[0],
             salva: c.slice(0, limiteSalva).reduce((s, p) => s + p, 0),
@@ -1514,6 +1518,29 @@ function ligaEvolucion(L) {
         out.push({ j, pos: f ? f.pos : null });
     }
     return out;
+}
+
+// Cuadro "probabilidad de cada puesto final" (mismo dibujo en app y visor)
+function ligaHtmlMatriz(L, S) {
+    const n = L.equipos.length, lim = n - (L.descienden || 0);
+    const filas = L.equipos.slice().sort((a, b) => S.probs[b].ptsEsperados - S.probs[a].ptsEsperados || S.probs[a].medio - S.probs[b].medio);
+    const color = (p, col) => {
+        if (!p) return 'background:rgba(128,128,128,0.08);';
+        const a = (0.18 + 0.82 * Math.min(1, p / 0.6)).toFixed(2);
+        const rgb = col === 0 ? '212,160,23' : col >= lim ? '229,57,53' : '46,160,90';
+        return `background:rgba(${rgb},${a});${a > 0.55 ? ' color:#fff;' : ''}`;
+    };
+    const celda = 'padding:0; height:24px; text-align:center; font-size:10px; font-weight:800; border-radius:4px; overflow:hidden;';
+    const cab = Array.from({ length: n }, (_, i) => `<th style="font-size:8.5px; font-weight:800; padding:2px 0; color:${i === 0 ? '#d4a017' : i >= lim ? '#e53935' : 'inherit'};">${i + 1}º</th>`).join('');
+    const cuerpo = filas.map(e => {
+        const q = S.probs[e], nos = e === L.nuestro;
+        return `<tr><td style="font-size:10px; font-weight:800; padding:2px 4px 2px 0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; ${nos ? 'color:#00b8a9;' : ''}">${String(e).replace(/</g, '&lt;')}</td>
+            ${q.porPuesto.map((p, i) => `<td style="${celda} ${color(p, i)}">${p >= 0.01 ? Math.round(p * 100) : p > 0 ? '·' : ''}</td>`).join('')}
+            <td style="font-size:10.5px; font-weight:900; text-align:right; padding-left:3px;">${Math.round(q.ptsEsperados)}</td></tr>`;
+    }).join('');
+    return `<table style="border-collapse:separate; border-spacing:2px; width:100%; table-layout:fixed;">
+        <colgroup><col style="width:24%;">${'<col>'.repeat(n)}<col style="width:8%;"></colgroup>
+        <thead><tr><th></th>${cab}<th style="font-size:8.5px; text-align:right; padding-left:3px;">Pts</th></tr></thead><tbody>${cuerpo}</tbody></table>`;
 }
 
 // Calendario oficial (Futormes). Formato: jornada|fecha|hora|campo|local|visitante
@@ -1626,16 +1653,17 @@ function pintarLiga() {
         <div class="grid4"><div class="box"><div class="v" style="color:var(--ambar);">${pctV(pN.campeon)}</div><div class="l">Campeón</div></div>
           <div class="box"><div class="v" style="color:var(--verde);">${pctV(pN.salva)}</div><div class="l">Salvarse</div></div>
           <div class="box"><div class="v" style="color:var(--rojo);">${pctV(pN.desc)}</div><div class="l">Descenso</div></div>
-          <div class="box"><div class="v">${num(pN.medio, 1)}º</div><div class="l">Puesto medio</div></div></div>
+          <div class="box"><div class="v" style="color:var(--azul);">${pctV(pN.podio)}</div><div class="l">Podio</div></div></div>
         <div class="sub" style="margin:12px 0 4px;">Probabilidad de acabar en cada puesto</div>
         <div style="display:flex; gap:3px; align-items:flex-end; height:84px;">${pN.porPuesto.map((p, i) => `<div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%;">
           <div style="font-size:9.5px; color:var(--gris);">${p >= 0.01 ? Math.round(p * 100) : ''}</div>
           <div style="width:100%; height:${Math.round(p / maxP * 58)}px; background:${i + 1 > S.limiteSalva ? 'var(--rojo)' : 'var(--turq)'}; border-radius:3px 3px 0 0;"></div>
           <div style="font-size:9.5px; color:var(--gris2);">${i + 1}º</div></div>`).join('')}</div>
         ${c ? `<div class="aviso" style="margin:12px 0 0; color:var(--texto);">🔑 <b style="color:var(--tiza);">Partido clave: vs ${esc(c.rival)}</b>${(() => { const mc = ligaPartidoCal(L, L.nuestro, c.rival); return mc ? ` <span style="color:var(--gris);">(J${mc.j}, ${esc(ligaFechaTxt(mc, true))})</span>` : ''; })()}<br>Si ganamos, ${pctV(c.siGana)} ${c.metrica === 'salva' ? 'de salvarnos' : 'de acabar primeros'}; si perdemos, ${pctV(c.siPierde)}.</div>` : ''}
-        <div class="tabla-wrap" style="margin-top:12px;"><table class="tb" style="min-width:0;"><thead><tr><th>Equipo</th><th>Campeón</th><th>Salvarse</th><th>Descenso</th></tr></thead><tbody>
-          ${tabla.map(f => { const q = S.probs[f.eq]; return `<tr${f.eq === L.nuestro ? ' class="mvp"' : ''}><td class="n">${esc(f.eq)}</td><td>${pctV(q.campeon)}</td><td class="pos-v">${pctV(q.salva)}</td><td class="neg-v">${pctV(q.desc)}</td></tr>`; }).join('')}
-        </tbody></table></div></div>`;
+        </div>
+        <div class="card"><div class="card-t"><span>📊 Probabilidad de cada puesto final</span></div>
+          <div class="sub" style="margin:-4px 0 8px;">% de acabar en cada puesto. Dorado: campeón; rojo: descenso. A la derecha, los puntos esperados.</div>
+          <div style="color:var(--tiza);">${ligaHtmlMatriz(L, S)}</div></div>`;
     }
   }
   const ev = ligaEvolucion(L).filter(x => x.pos);
