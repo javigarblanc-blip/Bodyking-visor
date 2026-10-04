@@ -290,7 +290,26 @@ const pm = j => (j.golesFavorPista || 0) - (j.golesContraPista || 0);
 const dorsalDe = nombre => { const j = (D.plantilla || []).find(x => x.nombre === nombre); if (j && j.dorsal != null) return j.dorsal;
   for (let i = (D.partidos || []).length - 1; i >= 0; i--) { const x = (D.partidos[i].jugadores || []).find(y => y.nombre === nombre); if (x && x.dorsal != null) return x.dorsal; } return null; };
 const circulo = nombre => { const d = dorsalDe(nombre); return `<span class="dorsal">${d != null ? esc(d) : esc(String(nombre || '?').charAt(0))}</span>`; };
-const mvpDe = p => (p.jugadores || []).slice().sort((a, b) => (b.impacto || 0) - (a.impacto || 0) || (b.goles || 0) - (a.goles || 0) || (b.asistencias || 0) - (a.asistencias || 0))[0] || null;
+/* NOTA MVP del partido (lo que hace cada uno + medio +/-). El MVP es la nota más alta.
+   Gol +3 · asistencia +2 · recuperación +0,5 · pérdida −0,5 · tiro +0,1 (máx. +1)
+   portero (10' o más en portería): parada +0,5 · portería a cero +2 (+1 si encaja uno) · +/- en el campo × 0,5 */
+function notaMVP(j) {
+    if (!j || !(j.minutos > 0)) return 0;
+    let n = 3 * (j.goles || 0) + 2 * (j.asistencias || 0) + 0.5 * (j.recuperaciones || 0) - 0.5 * (j.perdidas || 0)
+        + Math.min(1, 0.1 * (j.tiros || 0)) + 0.5 * ((j.golesFavorPista || 0) - (j.golesContraPista || 0));
+    const segPort = ((j.tiemposPorPosicion || {})[0]) || 0;
+    if (segPort >= 600) {
+        n += 0.5 * (j.paradas || 0);
+        const enc = j.golesContraPista || 0;
+        n += enc === 0 ? 2 : enc === 1 ? 1 : 0;
+    }
+    return Math.round(n * 10) / 10;
+}
+function mvpDelPartido(jugs) {
+    const con = (jugs || []).filter(j => (j.minutos || 0) > 0);
+    return con.slice().sort((a, b) => notaMVP(b) - notaMVP(a) || (b.impacto || 0) - (a.impacto || 0) || (b.goles || 0) - (a.goles || 0) || (b.asistencias || 0) - (a.asistencias || 0))[0] || null;
+}
+const mvpDe = p => mvpDelPartido(p.jugadores);
 const informeDe = p => (D.informes || []).find(i => i.fecha === p.fecha && i.rival === p.rival) || null;
 const nombrePos = id => (D.posiciones && D.posiciones[id]) || ['Portero','Lateral izq.','Lateral der.','Extremo izq.','Mediocentro','Extremo der.','Delantero'][id] || ('Pos ' + id);
 const idxPartido = p => D.partidos.indexOf(p);
@@ -369,7 +388,7 @@ const GUIA = [
     <p>Quien no llega a <b>${MIN_MUESTRA}'</b> queda «en observación»: con tan pocos minutos, la media no es fiable.</p>`],
   ['pm', '➕ +/-', `<p>Goles a favor menos goles en contra mientras está en el campo. Si entra con 0-0 y el equipo marca 2 y encaja 1 mientras juega, su +/- es <b>+1</b>.</p>`],
   ['balance', '🔄 Balance de balón', `<p>Recuperaciones menos pérdidas. En el equipo, se suma el de todos los jugadores en cada partido.</p><p>No cuenta en el impacto: sirve para ver quién gana y quién pierde balones.</p>`],
-  ['mvp', '🌟 MVP', `<ul><li><b>Del partido:</b> el jugador con más impacto en ese partido. Si hay empate, desempatan los goles y luego las asistencias.</li>
+  ['mvp', '🌟 MVP', `<ul><li><b>Del partido:</b> el de mejor <b>nota MVP</b> (columna ⭐). Cuenta sobre todo lo que hace cada uno: <b>gol +3</b>, <b>asistencia +2</b>, <b>recuperación +0,5</b>, <b>pérdida −0,5</b>, <b>tiro +0,1</b> (máximo +1) y la mitad de su +/-. Los porteros (10' o más en portería) suman <b>+0,5 por parada</b> y <b>+2 con portería a cero</b> (+1 si encajan uno). Si hay empate, desempata el impacto.</li>
     <li><b>Del bloque:</b> cada 4 partidos de liga, el de mejor impacto medio en esos 4. Mientras el bloque no se cierra, aparece como «va líder».</li></ul>`],
   ['parejas', '🤝 Parejas', `<p>Cómo le va al equipo cuando dos jugadores coinciden en el campo: goles a favor menos en contra mientras juegan juntos, llevado a un partido entero.</p>
     <p><b>En defensa</b> cuenta solo el tiempo en que los dos están a la vez en posiciones defensivas.</p><p>Hace falta un mínimo de <b>${MIN_MUESTRA}' juntos</b> para entrar en la lista.</p>`],
@@ -482,9 +501,9 @@ function pintarPartidos() {
 
 const COLS = [
   { k: 'minutos', t: "Min" }, { k: 'goles', t: '⚽' }, { k: 'asistencias', t: '👟' }, { k: 'recuperaciones', t: '✅' },
-  { k: 'perdidas', t: '❌' }, { k: 'tiros', t: '🎯' }, { k: 'pm', t: '+/-' }, { k: 'impacto', t: 'Imp' }
+  { k: 'perdidas', t: '❌' }, { k: 'tiros', t: '🎯' }, { k: 'pm', t: '+/-' }, { k: 'impacto', t: 'Imp' }, { k: 'nota', t: '⭐' }
 ];
-const valCol = (j, k) => k === 'pm' ? pm(j) : (Number(j[k]) || 0);
+const valCol = (j, k) => k === 'pm' ? pm(j) : k === 'nota' ? notaMVP(j) : (Number(j[k]) || 0);
 
 function abrirPartido(idx, orden) {
   const p = D.partidos[idx]; if (!p) return;
@@ -523,6 +542,7 @@ function abrirPartido(idx, orden) {
               const esM = mvp && j.nombre === mvp.nombre;
               return `<tr class="j${esM ? ' mvp' : ''}" data-det="${esc(j.nombre)}"><td class="n">${esM ? '⭐ ' : ''}${esc(j.nombre)}</td>${COLS.map(c => {
                 const v = valCol(j, c.k);
+                if (c.k === 'nota') return `<td style="font-weight:800; color:var(--ambar);">${num(v, 1)}</td>`;
                 if (c.k === 'pm' || c.k === 'impacto') return `<td class="${colV(v)}" style="font-weight:800;">${c.k === 'pm' ? signo(v) : num(v, 1)}</td>`;
                 return `<td class="${v ? '' : 'cero-v'}">${c.k === 'minutos' ? v + "'" : v}</td>`;
               }).join('')}</tr>`;
@@ -530,7 +550,7 @@ function abrirPartido(idx, orden) {
             <tr class="tot"><td>Equipo</td>${COLS.map(c => `<td>${['goles','asistencias','recuperaciones','perdidas','tiros'].includes(c.k) ? tot(c.k) : ''}</td>`).join('')}</tr>
           </tbody>
         </table></div>
-        <div class="nota" style="padding:0 4px;">✅ recuperaciones · ❌ pérdidas · 🎯 tiros · Imp impacto. Toca una columna para ordenar o un jugador para ver su detalle.</div>
+        <div class="nota" style="padding:0 4px;">✅ recuperaciones · ❌ pérdidas · 🎯 tiros · Imp impacto · ⭐ nota MVP ${info('mvp')}. Toca una columna para ordenar o un jugador para ver su detalle.</div>
       </div>
       ${insightsDe(idx).length ? `<div class="card" style="border-color:rgba(0,217,196,.3);"><div class="card-t" style="color:var(--turq);"><span>🔍 Lo que dicen los datos ${info('insights')}</span></div>${htmlInsights(insightsDe(idx))}</div>` : ''}
       ${inf ? `<div class="card"><details class="ia"><summary>🤖 Informe del partido (IA) ›</summary><div class="txt">${esc(inf.texto)}</div></details></div>` : ''}
@@ -546,7 +566,7 @@ function abrirDetalle(idx, nombre) {
     const v = valCol(j, c.k), m = suyos.length ? suyos.reduce((s, y) => s + valCol(y, c.k), 0) / suyos.length : 0, dif = v - m;
     let cl = 'cero-v', fl = '＝';
     if (Math.abs(dif) >= 0.05) { const bueno = c.k === 'perdidas' ? dif < 0 : dif > 0; cl = bueno ? 'pos-v' : 'neg-v'; fl = dif > 0 ? '▲' : '▼'; }
-    const nombreC = { minutos:'Minutos', goles:'Goles', asistencias:'Asistencias', recuperaciones:'Recuperaciones', perdidas:'Pérdidas', tiros:'Tiros', pm:'+/-', impacto:'Impacto' }[c.k];
+    const nombreC = { minutos:'Minutos', goles:'Goles', asistencias:'Asistencias', recuperaciones:'Recuperaciones', perdidas:'Pérdidas', tiros:'Tiros', pm:'+/-', impacto:'Impacto', nota:'Nota MVP' }[c.k];
     const fmt = x => c.k === 'pm' ? signo(x, Number.isInteger(x) ? 0 : 1) : num(x, Number.isInteger(x) ? 0 : 1);
     return `<tr><td class="n">${c.t} <span style="color:var(--gris); font-weight:500; font-size:11px;">${nombreC}</span></td><td style="font-weight:800; color:var(--tiza);">${fmt(v)}</td><td class="cero-v">${num(m, 1)}</td><td class="${cl}" style="font-weight:800;">${fl} ${Math.abs(dif) >= 0.05 ? num(Math.abs(dif), 1) : ''}</td></tr>`;
   }).join('');
@@ -1142,7 +1162,7 @@ function insightsBase(ps, durDef) {
 
     /* 8. MVP repetido (hecho) */
     {
-        const mvp = p => ((p.jugadores || []).filter(j => (j.minutos || 0) > 0).slice().sort((a, b) => (b.impacto || 0) - (a.impacto || 0) || (b.goles || 0) - (a.goles || 0) || (b.asistencias || 0) - (a.asistencias || 0))[0] || {}).nombre;
+        const mvp = p => (mvpDelPartido(p.jugadores) || {}).nombre;
         const m = mvp(cur);
         if (m) {
             let r = 0; for (let k = n - 1; k >= 0; k--) { if (mvp(ps[k]) === m) r++; else break; }
