@@ -277,7 +277,7 @@ const NIVELES = {
 
 let D = null;          // datos de la temporada
 let META = null;       // { actualizado }
-let estado = { tab: 'resumen', rCrit: 'media', rRango: 'todos', rVista: 'jug', pVista: 'gen', evMet: 'impacto', jug: null, ficha: null };
+let estado = { tab: 'resumen', rCrit: 'media', rRango: 'todos', rVista: 'jug', pVista: 'gen', evMet: 'media', jug: null, ficha: null };
 
 /* ---------- utilidades ---------- */
 const esc = t => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
@@ -343,16 +343,17 @@ function rankingBloque(partidos) {
     a.min += j.minutos || 0; a.imp += j.impacto || 0; a.goles += j.goles || 0; a.asist += j.asistencias || 0;
     a.rec += j.recuperaciones || 0; a.per += j.perdidas || 0; a.dur += (p.duracion || DUR_DEF); a.pj++;
   }));
-  return Object.entries(ag).map(([nombre, a]) => ({ nombre, ...a, media: a.min > 0 ? a.imp / a.min * (a.dur / a.pj) : 0 }))
+  // Nota del bloque = impacto por partido completo × asistencia (partidos jugados / partidos del bloque)
+  return Object.entries(ag).map(([nombre, a]) => { const por50 = a.min > 0 ? a.imp / a.min * (a.dur / a.pj) : 0; return { nombre, ...a, por50, media: por50 * a.pj / Math.max(1, partidos.length) }; })
     .filter(x => x.min > 0).sort((a, b) => b.media - a.media || b.imp - a.imp);
 }
 
 function formaJugador(nombre) {
-  const v = liga().map(p => (p.jugadores || []).find(j => j.nombre === nombre)).filter(Boolean).slice(-4).map(j => j.impacto || 0);
+  const v = liga().map(p => ({ p, j: (p.jugadores || []).find(j => j.nombre === nombre) })).filter(x => x.j && (x.j.minutos || 0) > 0).slice(-4).map(x => (x.j.impacto || 0) / x.j.minutos * (x.p.duracion || DUR_DEF));
   if (v.length < 2) return null;
   const m = Math.ceil(v.length / 2), a = v.slice(0, m), b = v.slice(m).length ? v.slice(m) : a;
   const dif = b.reduce((s, x) => s + x, 0) / b.length - a.reduce((s, x) => s + x, 0) / a.length;
-  if (Math.abs(dif) < 0.4) return { ic: '➖', t: 'Forma estable', c: 'var(--gris)' };
+  if (Math.abs(dif) < 1) return { ic: '➖', t: 'Forma estable', c: 'var(--gris)' };
   return dif > 0 ? { ic: '📈', t: 'En alza', c: 'var(--verde)' } : { ic: '📉', t: 'En baja', c: 'var(--rojo)' };
 }
 
@@ -389,7 +390,7 @@ const GUIA = [
   ['pm', '➕ +/-', `<p>Goles a favor menos goles en contra mientras está en el campo. Si entra con 0-0 y el equipo marca 2 y encaja 1 mientras juega, su +/- es <b>+1</b>.</p>`],
   ['balance', '🔄 Balance de balón', `<p>Recuperaciones menos pérdidas. En el equipo, se suma el de todos los jugadores en cada partido.</p><p>No cuenta en el impacto: sirve para ver quién gana y quién pierde balones.</p>`],
   ['mvp', '🌟 MVP', `<ul><li><b>Del partido:</b> el de mejor <b>nota MVP</b> (columna ⭐). Cuenta sobre todo lo que hace cada uno: <b>gol +3</b>, <b>asistencia +2</b>, <b>recuperación +0,5</b>, <b>pérdida −0,5</b>, <b>tiro +0,1</b> (máximo +1) y la mitad de su +/-. Los porteros (10' o más en portería) suman <b>+0,5 por parada</b> y <b>+2 con portería a cero</b> (+1 si encajan uno). Si hay empate, desempata el impacto.</li>
-    <li><b>Del bloque:</b> cada 4 partidos de liga, el de mejor impacto medio en esos 4. Mientras el bloque no se cierra, aparece como «va líder».</li></ul>`],
+    <li><b>Del bloque:</b> cada 4 partidos de liga, el de mejor <b>nota del bloque</b>: su impacto por partido completo multiplicado por la parte del bloque que ha jugado. Quien juega los 4 conserva toda su media; quien juega 3, el 75%; quien juega 1, el 25%. Mientras el bloque no se cierra, aparece como «va líder».</li></ul>`],
   ['parejas', '🤝 Parejas', `<p>Cómo le va al equipo cuando dos jugadores coinciden en el campo: goles a favor menos en contra mientras juegan juntos, llevado a un partido entero.</p>
     <p><b>En defensa</b> cuenta solo el tiempo en que los dos están a la vez en posiciones defensivas.</p><p>Hace falta un mínimo de <b>${MIN_MUESTRA}' juntos</b> para entrar en la lista.</p>`],
   ['porteros', '🧤 Porteros y rachas', `<ul><li><b>Goles por partido:</b> goles encajados en portería llevados a un partido entero.</li>
@@ -875,16 +876,19 @@ function pintarPanel() {
 }
 
 /* ---------- FICHA DE JUGADOR (temporada) ---------- */
-const EVO_MET = { impacto: ['Impacto', j => j.impacto || 0], minutos: ['Minutos', j => j.minutos || 0], goles: ['Goles', j => j.goles || 0], asistencias: ['Asistencias', j => j.asistencias || 0], balance: ['Balance de balón', j => (j.recuperaciones || 0) - (j.perdidas || 0)] };
+const EVO_MET = { media: ['Impacto medio (por 50\')', (j, p) => (j.minutos || 0) > 0 ? (j.impacto || 0) / j.minutos * (p.duracion || DUR_DEF) : null], impacto: ['Impacto total', j => j.impacto || 0], nota: ['Nota MVP', j => notaMVP(j)], minutos: ['Minutos', j => j.minutos || 0], goles: ['Goles', j => j.goles || 0], asistencias: ['Asistencias', j => j.asistencias || 0], balance: ['Balance de balón', j => (j.recuperaciones || 0) - (j.perdidas || 0)] };
 function graficaEvolucion(nombre, met) {
   const ps = liga(), f = EVO_MET[met][1];
-  const pts = ps.map((p, i) => { const j = (p.jugadores || []).find(y => y.nombre === nombre); return { i, p, v: j ? f(j) : null }; });
+  const pts = ps.map((p, i) => { const j = (p.jugadores || []).find(y => y.nombre === nombre); return { i, p, j, v: j ? f(j, p) : null }; });
   const jug = pts.filter(x => x.v !== null);
   if (jug.length < 2) return '<div style="font-size:12.5px; color:var(--gris); padding:6px 0;">Hace falta más de un partido jugado para ver su evolución.</div>';
   const W = 320, H = 150, L = 26, R = 8, T = 12, B = 22, n = ps.length;
   const vals = jug.map(x => x.v), mn = Math.min(0, ...vals), mx = Math.max(1, ...vals);
   const x = k => n === 1 ? (L + W - R) / 2 : L + k / (n - 1) * (W - L - R), y = v => T + (1 - (v - mn) / (mx - mn)) * (H - T - B);
-  const media = vals.reduce((s, v) => s + v, 0) / vals.length;
+  // Impacto medio: igual que en la ficha (impacto total / minutos totales × duración media)
+  const media = met === 'media'
+    ? (() => { const mi = jug.reduce((s, z) => s + (z.j.minutos || 0), 0), im = jug.reduce((s, z) => s + (z.j.impacto || 0), 0), du = jug.reduce((s, z) => s + (z.p.duracion || DUR_DEF), 0) / jug.length; return mi > 0 ? im / mi * du : 0; })()
+    : vals.reduce((s, v) => s + v, 0) / vals.length;
   let g = '';
   [mn, (mn + mx) / 2, mx].forEach(v => { g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" style="stroke:var(${v === 0 ? '--reja0' : '--reja'})"/>${svgTxt(L - 5, y(v) + 3, num(v, Number.isInteger(v) ? 0 : 1), { a: 'end' })}`; });
   g += `<line x1="${L}" x2="${W - R}" y1="${y(media)}" y2="${y(media)}" style="stroke:var(--ambar)" stroke-width="1.5" stroke-dasharray="4 4"/>`;
@@ -892,7 +896,7 @@ function graficaEvolucion(nombre, met) {
   jug.forEach(z => { g += `<circle cx="${x(z.i)}" cy="${y(z.v)}" r="4.5" style="fill:var(--turq); stroke:var(--ink3)" stroke-width="2"><title>J${z.i + 1} vs ${esc(z.p.rival)}: ${num(z.v, 1)}</title></circle>`; });
   ps.forEach((p, k) => { if (n <= 12 || k % 2 === 0) g += svgTxt(x(k), H - 7, 'J' + (k + 1)); });
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Evolución de ${esc(nombre)}">${g}</svg>
-    <div class="leyenda"><span><i style="background:var(--turq)"></i>${EVO_MET[met][0]} por partido</span><span><i style="background:var(--ambar)"></i>Su media (${num(media, 1)})</span></div>
+    <div class="leyenda"><span><i style="background:var(--turq)"></i>${met === 'media' ? 'Impacto medio en cada partido' : EVO_MET[met][0] + ' por partido'}</span><span><i style="background:var(--ambar)"></i>Su media (${num(media, 1)})</span></div>
     ${jug.length < ps.length ? `<div class="nota" style="margin-top:4px;">Sin punto: partidos que no jugó.</div>` : ''}`;
 }
 
@@ -976,14 +980,14 @@ function pintarMvp() {
       <div class="card-t"><span>Bloque ${n}${enCurso ? ` · en curso (${b.length}/4)` : ''}</span><span>${esc(b[0].fecha || '')}${!enCurso ? ' → ' + esc(b[3].fecha || '') : ''}</span></div>
       <div class="fila toque" data-jug="${esc(r[0].nombre)}" style="background:${enCurso ? 'var(--sutil)' : 'rgba(0,217,196,.08)'}; border-radius:12px; padding:12px 10px;">
         <span style="font-size:24px;">${enCurso ? '📈' : '🏅'}</span>
-        <div class="nom" style="font-size:15px;">${esc(r[0].nombre)}<div class="sub">${enCurso ? 'Va líder' : 'MVP del bloque'} · ⚽ ${r[0].goles} · 👟 ${r[0].asist} · ${r[0].min}'</div></div>
-        <div style="text-align:right;"><div class="val">${signo(r[0].media, 2)} <span style="font-size:11px; color:var(--gris);">med</span></div><div style="color:var(--azul); font-size:12.5px; font-weight:700;">${signo(r[0].imp, 1)} imp</div></div></div>
+        <div class="nom" style="font-size:15px;">${esc(r[0].nombre)}<div class="sub">${enCurso ? 'Va líder' : 'MVP del bloque'} · ⚽ ${r[0].goles} · 👟 ${r[0].asist} · ${r[0].pj}/${b.length} PJ · ${r[0].min}' · ${signo(r[0].por50, 1)} por 50'</div></div>
+        <div style="text-align:right;"><div class="val">${signo(r[0].media, 2)} <span style="font-size:11px; color:var(--gris);">nota</span></div><div style="color:var(--azul); font-size:12.5px; font-weight:700;">${signo(r[0].imp, 1)} imp</div></div></div>
       ${r.slice(1).map((x, i) => `<div class="fila toque" data-jug="${esc(x.nombre)}"><span class="pos">${med[i + 1] || i + 2}</span>
-        <div class="nom">${esc(x.nombre)}<div class="sub">${x.pj} PJ · ${x.min}'</div></div>${fImp(x)}<div class="val" style="font-size:15px; color:var(--tiza);">${signo(x.media, 2)}</div></div>`).join('')}
+        <div class="nom">${esc(x.nombre)}<div class="sub">${x.pj}/${b.length} PJ · ${x.min}' · ${signo(x.por50, 1)} por 50'</div></div>${fImp(x)}<div class="val" style="font-size:15px; color:var(--tiza);">${signo(x.media, 2)}</div></div>`).join('')}
       <div class="sub" style="margin-top:8px;">${b.map(p => `vs ${esc(p.rival)} ${p.golesH}–${p.golesR}`).join(' · ')}</div>
     </div>`;
   };
-  el.innerHTML = `<div class="aviso" style="color:var(--texto); background:rgba(0,217,196,.06); border-color:rgba(0,217,196,.25);">🌟 Cada 4 partidos de liga se elige un MVP: el jugador con mejor impacto medio (med) en ese bloque. En azul, su impacto total (imp). ${info('mvp')}</div>`
+  el.innerHTML = `<div class="aviso" style="color:var(--texto); background:rgba(0,217,196,.06); border-color:rgba(0,217,196,.25);">🌟 Cada 4 partidos de liga se elige un MVP: el de mejor <b>nota</b> del bloque = su impacto por partido completo × los partidos que jugó de ese bloque (los 4, toda su media; 1, la cuarta parte). En azul, su impacto total (imp). ${info('mvp')}</div>`
     + topBal + bloques.map((b, i) => ({ b, n: i + 1 })).reverse().map(x => bloque(x.b, x.n)).join('');
 }
 
