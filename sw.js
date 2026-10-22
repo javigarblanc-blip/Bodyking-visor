@@ -1,13 +1,14 @@
 // Bodyking FC — Visor. Guarda la página para que abra rápido y funcione sin cobertura;
 // los datos (Firebase) nunca se guardan aquí: siempre se piden en directo.
-const CACHE = 'bodyking-visor-v9';
+const CACHE = 'bodyking-visor-v10';
 const BASE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './icon-maskable.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(BASE)).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
+  // Solo borra versiones antiguas del visor: la app de Bodyking y otras webs de github.io comparten este almacén
+  e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k.startsWith('bodyking-visor-') && k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
