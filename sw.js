@@ -1,7 +1,7 @@
 // Bodyking FC — Visor. Guarda la página para que abra rápido y funcione sin cobertura;
 // los datos (Firebase) nunca se guardan aquí: siempre se piden en directo.
-const CACHE = 'bodyking-visor-v10';
-const BASE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './icon-maskable.png'];
+const CACHE = 'bodyking-visor-v11';
+const BASE = ['./', './index.html', './delegado.html', './manifest.json', './icon-192.png', './icon-512.png', './icon-maskable.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(BASE)).then(() => self.skipWaiting()));
